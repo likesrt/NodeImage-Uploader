@@ -38,8 +38,12 @@
         withCredentials,
         responseType: "json",
         onload: (r) => {
-          if (r.status === 200 && r.response) resolve(r.response);
-          else reject(r);
+          // 放宽判断：2xx 均视为成功；优先使用 r.response，否则尝试解析 responseText；都没有时返回空对象
+          if (r.status >= 200 && r.status < 300) {
+            if (r.response != null) return resolve(r.response);
+            try { return resolve(JSON.parse(r.responseText || "{}")); } catch { return resolve({}); }
+          }
+          reject(r);
         },
         onerror: reject,
       });
@@ -148,9 +152,10 @@
         if (r?.error) throw new Error(r.error);
         return false;
       } catch (e) {
-        // 备用 Cookie 模式
+        // 备用 Cookie 模式：使用 /api/images/:id 端点
         try {
-          const r2 = await request({ url, method: "DELETE", withAuth: false, withCredentials: true });
+          const cookieDel = `https://api.nodeimage.com/api/images/${encodeURIComponent(id)}`;
+          const r2 = await request({ url: cookieDel, method: "DELETE", withAuth: false, withCredentials: true });
           if (r2?.success) return true;
         } catch {}
         throw e;
