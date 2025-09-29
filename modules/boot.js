@@ -160,6 +160,10 @@
         flex: 1;       /* 占据剩余空间，开启内部滚动 */
         min-height: 0; /* 防止子元素撑开导致父容器溢出 */
         position: relative;
+        /* 防止不足两行时首行被拉伸占满容器高度 */
+        align-content: start;
+        align-items: start;
+        grid-auto-rows: auto;
       }
       .image-card {
         background: white;
@@ -271,7 +275,10 @@
       }
     } catch {}
     if (utils.isNodeImageSite()) { auth.handleNodeImageSite(); return; }
-    window.addEventListener("focus", () => auth.checkLoginIfNeeded());
+    // 如已持有有效 API Key，则不主动拉取，避免频繁打开站点页面
+    if (!NI.state || !NI.state.apiKey) {
+      window.addEventListener("focus", () => auth.checkLoginIfNeeded());
+    }
     // 使用适配器自动初始化（可扩展多站点）
     if (NI.integration && typeof NI.integration.autoInit==='function') {
       NI.integration.autoInit();
@@ -282,6 +289,9 @@
       // 回退模式下补充粘贴监听，避免重复绑定
       document.addEventListener("paste", NI.handler.onPaste, true);
     }
-    auth.checkLogoutFlag(); auth.setupStorageListener(); await auth.checkLoginIfNeeded();
+    auth.checkLogoutFlag(); auth.setupStorageListener();
+    if (!NI.state || !NI.state.apiKey) {
+      await auth.checkLoginIfNeeded();
+    }
   };
 })();

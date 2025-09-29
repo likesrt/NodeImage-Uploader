@@ -1,0 +1,34 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        { "header": "access-control-allow-origin", "operation": "set", "value": "https://www.nodeimage.com" },
+        { "header": "access-control-allow-methods", "operation": "set", "value": "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
+        { "header": "access-control-allow-headers", "operation": "set", "value": "*" },
+        { "header": "access-control-allow-credentials", "operation": "set", "value": "true" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "api.nodeimage.com",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "origin", "operation": "set", "value": "https://www.nodeimage.com" },
+        { "header": "referer", "operation": "set", "value": "https://www.nodeimage.com/" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "api.nodeimage.com",
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  }
+]

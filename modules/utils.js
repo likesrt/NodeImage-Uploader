@@ -118,13 +118,30 @@
       return true;
     },
     /**
-     * 简易 Toast 提示：在面板打开时优先使用旧版面板提示位置，否则使用底部悬浮。
+     * 简易 Toast 提示：优先使用工具栏状态显示，其次面板提示，最后底部悬浮。
      * @param {string} msg 文本
+     * @param {string} [type='info'] 状态类型 (success/error/warning/info)
      */
-    toast(msg) {
+    toast(msg, type = 'info') {
+      // 优先使用工具栏状态显示（类似old.js）
+      const statusEl = document.getElementById("nodeimage-status");
+      if (statusEl) {
+        statusEl.className = type;
+        statusEl.textContent = msg;
+        // 自动恢复状态
+        clearTimeout(statusEl._restoreTimer);
+        statusEl._restoreTimer = setTimeout(() => {
+          if (NI.ui && typeof NI.ui.updateState === 'function') {
+            NI.ui.updateState();
+          }
+        }, 2000);
+        return;
+      }
+      
       // 面板存在时使用面板内提示（旧版位置/样式）
       const used = this.showPanelMessage(msg);
       if (used) return;
+      
       // 回退：底部居中悬浮提示
       let el = document.getElementById("ni-toast");
       if (!el) {

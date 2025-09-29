@@ -20,6 +20,8 @@
     RETRY_DELAY: 1000,
     LIST_PAGE_SIZE: 10,
     MAX_FILE_SIZE: 30 * 1024 * 1024,
+    // 调试模式：启用后在控制台显示详细操作日志
+    DEBUG: true, // 设置为 false / true 启用调试模式
     ENDPOINTS: {
       upload: "https://api.nodeimage.com/api/upload",
       apiKey: "https://api.nodeimage.com/api/user/api-key",
@@ -35,7 +37,8 @@
        {
          host: /(^|\.)nodeseek\.com$/i,
          toolbarContainer: '.mde-toolbar',
-         editorSelector: '.CodeMirror, textarea, [contenteditable="true"]',
+         // 更精确的编辑器选择器，基于实际的DOM结构
+         editorSelector: '#cm-editor-wrapper, .CodeMirror-wrap, textarea',
         //  hotkeys: { 'Ctrl+Shift+U': 'openPanel' },
        },
      ],

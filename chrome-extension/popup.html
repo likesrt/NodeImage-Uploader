@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NodeImage 图片助手</title>
+    <style>
+      html, body { width: 800px; height: 600px; overflow: hidden; }
+      /* 让面板在弹窗内占满 */
+      body { margin: 0; background: #fff; }
+      /* 弹窗内将面板作为首页内容展示（覆盖浮层布局） */
+      .panel-overlay { display: none !important; }
+      #nodeimage-panel { position: static !important; transform: none !important; left: auto !important; top: auto !important; width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: none !important; box-shadow: none !important; border-radius: 0 !important; }
+    </style>
+  </head>
+  <body>
+    <!-- 提前提供 GM_* 兼容层（供 modules 使用） -->
+    <script src="popup-env.js"></script>
+    <!-- 按与 userscript 相同顺序加载模块（IIFE 形式） -->
+    <script src="modules/config.js"></script>
+    <script src="modules/storage.js"></script>
+    <script src="modules/utils.js"></script>
+    <script src="modules/filetype.js"></script>
+    <script src="modules/api.js"></script>
+    <script src="modules/integration.js"></script>
+    <script src="modules/ui.js"></script>
+    <script src="modules/handler.js"></script>
+    <script src="modules/auth.js"></script>
+    <script src="modules/boot.js"></script>
+    <!-- 启动并直接打开面板 -->
+    <script src="popup.js"></script>
+  </body>
+  </html>

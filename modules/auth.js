@@ -87,5 +87,6 @@
         this.checkLoginIfNeeded(true);
       this.monitorLogout();
     },
+
   };
 })();
