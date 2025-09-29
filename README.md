@@ -8,8 +8,7 @@
 
 ### 修复网格拉伸导致图片不足两行时首行被拉伸
 
-
-[浏览器扩展下载地址-Github Releases](https://github.com/likesrt/NodeImage-Uploader/releases)
+# 建议使用油猴脚本，浏览器扩展BUG没有完全解决
 
 [油猴脚本安装地址: https://raw.githubusercontent.com/likesrt/NodeImage-Uploader/main/nodeImage-uploader.user.js](https://raw.githubusercontent.com/likesrt/NodeImage-Uploader/main/nodeImage-uploader.user.js)
 
