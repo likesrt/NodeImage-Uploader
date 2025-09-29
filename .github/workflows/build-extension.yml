@@ -42,3 +42,15 @@ jobs:
           name: nodeimage-extension.crx
           path: dist/nodeimage-extension.crx
           if-no-files-found: warn
+
+
+      - name: Create draft release with raw assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          name: Build ${{ github.run_number }} (${{ github.ref_name }})
+          draft: true
+          prerelease: true
+          files: |
+            dist/nodeimage-extension.zip
+            dist/nodeimage-extension.crx
