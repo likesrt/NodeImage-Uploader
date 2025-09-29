@@ -275,8 +275,10 @@
       }
     } catch {}
     if (utils.isNodeImageSite()) { auth.handleNodeImageSite(); return; }
-    // 在扩展弹窗环境（chrome-extension://）同样尝试自动获取 API Key（后台会短暂拉起站点标签并在请求完成后关闭）
-    window.addEventListener("focus", () => auth.checkLoginIfNeeded());
+    // 如已持有有效 API Key，则不主动拉取，避免频繁打开站点页面
+    if (!NI.state || !NI.state.apiKey) {
+      window.addEventListener("focus", () => auth.checkLoginIfNeeded());
+    }
     // 使用适配器自动初始化（可扩展多站点）
     if (NI.integration && typeof NI.integration.autoInit==='function') {
       NI.integration.autoInit();
@@ -288,6 +290,8 @@
       document.addEventListener("paste", NI.handler.onPaste, true);
     }
     auth.checkLogoutFlag(); auth.setupStorageListener();
-    await auth.checkLoginIfNeeded();
+    if (!NI.state || !NI.state.apiKey) {
+      await auth.checkLoginIfNeeded();
+    }
   };
 })();
