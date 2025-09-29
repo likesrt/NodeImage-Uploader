@@ -2,35 +2,82 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
-OUT_DIR="$ROOT_DIR/dist/extension"
+SRC_DIR="$ROOT_DIR/chrome-extension"
+DIST_DIR="$ROOT_DIR/dist"
+OUT_DIR="$DIST_DIR/extension"
 
-rm -rf "$ROOT_DIR/dist"
+ZIP_NAME=${ZIP_NAME:-nodeimage-extension.zip}
+CRX_NAME=${CRX_NAME:-nodeimage-extension.crx}
+
+copy_dir() {
+  local src="$1" dst="$2"
+  mkdir -p "$dst"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a "$src" "$dst/"
+  else
+    cp -R "$src" "$dst/"
+  fi
+}
+
+rm -rf "$DIST_DIR"
 mkdir -p "$OUT_DIR"
 
-# 拷贝扩展源文件
-rsync -a --exclude modules "$ROOT_DIR/chrome-extension/" "$OUT_DIR/"
+# 复制扩展源（排除 modules，使用根 modules 作为单一来源）
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --exclude modules "$SRC_DIR/" "$OUT_DIR/"
+else
+  # 简易降级替代
+  cp -R "$SRC_DIR"/* "$OUT_DIR"/
+  rm -rf "$OUT_DIR/modules" || true
+fi
 
-# 拷贝根模块与静态资源
+# 复制根 modules 与 static 资源
 mkdir -p "$OUT_DIR/modules" "$OUT_DIR/static"
-rsync -a "$ROOT_DIR/modules/" "$OUT_DIR/modules/"
-rsync -a "$ROOT_DIR/static/" "$OUT_DIR/static/"
+copy_dir "$ROOT_DIR/modules/" "$OUT_DIR/modules"
+[ -d "$ROOT_DIR/static" ] && copy_dir "$ROOT_DIR/static/" "$OUT_DIR/static" || true
 
-echo "Pack extension to zip"
-(cd "$OUT_DIR" && zip -qr ../nodeimage-extension.zip .)
+# 注入构建元信息（可选）
+if [ "${GITHUB_ACTIONS:-false}" = "true" ]; then
+  cat > "$OUT_DIR/build.txt" <<EOF
+repo: ${GITHUB_REPOSITORY:-local}
+ref:  ${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo local)}
+sha:  ${GITHUB_SHA:-$(git rev-parse --short HEAD 2>/dev/null || echo local)}
+date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+EOF
+fi
 
-echo "Try pack CRX (using ephemeral key if EXTENSION_PEM not provided)"
-KEY_DIR="$ROOT_DIR/dist/certs"
+echo "[1/2] Packing ZIP -> $ZIP_NAME"
+(cd "$OUT_DIR" && zip -qr "../$ZIP_NAME" .)
+
+echo "[2/2] Packing CRX (optional) -> $CRX_NAME"
+KEY_DIR="$DIST_DIR/certs"
+KEY_FILE="$KEY_DIR/key.pem"
 mkdir -p "$KEY_DIR"
+
+# 读取密钥：优先 EXTENSION_PEM，其次已有密钥，最后临时生成（仅用于本地测试）
 if [ -n "${EXTENSION_PEM:-}" ]; then
-  echo "$EXTENSION_PEM" | sed 's/\r$//' > "$KEY_DIR/key.pem"
+  printf '%s' "$EXTENSION_PEM" | tr -d '\r' > "$KEY_FILE"
+elif [ -f "$KEY_FILE" ]; then
+  echo "Using existing key: $KEY_FILE"
 else
-  openssl genrsa -out "$KEY_DIR/key.pem" 2048 >/dev/null 2>&1
+  if command -v openssl >/dev/null 2>&1; then
+    openssl genrsa -out "$KEY_FILE" 2048 >/dev/null 2>&1 || true
+  else
+    echo "openssl not found; skip CRX (zip already built)"; exit 0
+  fi
 fi
 
-if command -v npx >/dev/null 2>&1; then
-  npx --yes crx3 --key "$KEY_DIR/key.pem" --crx "$ROOT_DIR/dist/nodeimage-extension.crx" "$OUT_DIR" || echo "crx3 pack skipped"
+# 查找 crx3 CLI
+if command -v crx3 >/dev/null 2>&1; then
+  CRX3_BIN="crx3"
+elif command -v npx >/dev/null 2>&1; then
+  CRX3_BIN="npx -y crx3"
 else
-  echo "npx not found, skip crx"
+  echo "crx3 cli not found; skip CRX (zip already built)"; exit 0
 fi
 
-echo "Done. Output in dist/"
+if ! eval $CRX3_BIN --key "$KEY_FILE" --crx "$DIST_DIR/$CRX_NAME" "$OUT_DIR"; then
+  echo "CRX pack failed; continue with ZIP only"
+fi
+
+echo "Done. Outputs: $DIST_DIR/$ZIP_NAME and (optional) $DIST_DIR/$CRX_NAME"
