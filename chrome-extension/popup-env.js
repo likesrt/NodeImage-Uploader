@@ -35,11 +35,12 @@
     const isForm=(typeof FormData!=='undefined') && (data instanceof FormData);
     let formParts=null, raw=null;
     if(isForm){
+      const toBase64=(ab)=>{ let b=''; const bytes=new Uint8Array(ab); for(let i=0;i<bytes.byteLength;i++) b+=String.fromCharCode(bytes[i]); return btoa(b); };
       formParts=[];
       for(const [k,v] of data.entries()){
         if(v instanceof File || (typeof Blob!=='undefined' && v instanceof Blob)){
-          let fileName=(v&&v.name)||'blob'; let mime=v.type||'application/octet-stream'; let buf=await v.arrayBuffer();
-          formParts.push({ kind:'file', key:k, fileName, mime, buffer:buf, lastModified:v.lastModified||Date.now() });
+          const fileName=(v&&v.name)||'blob'; const mime=v.type||'application/octet-stream'; const ab=await v.arrayBuffer();
+          formParts.push({ kind:'file', key:k, fileName, mime, base64: toBase64(ab), lastModified:v.lastModified||Date.now() });
         }else{ formParts.push({ kind:'text', key:k, value:String(v) }); }
       }
     } else if (data!=null) raw=data;
@@ -62,4 +63,3 @@
     window.GM_registerMenuCommand=function(){};
   }catch{}
 })();
-

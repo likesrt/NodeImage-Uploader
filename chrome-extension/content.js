@@ -64,19 +64,25 @@
     let formParts = null;
     let raw = null;
     if (isForm) {
+      const toBase64 = (ab) => {
+        let b = '';
+        const bytes = new Uint8Array(ab);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) b += String.fromCharCode(bytes[i]);
+        return btoa(b);
+      };
       formParts = [];
       for (const [k, v] of data.entries()) {
         if (v instanceof File || (typeof Blob !== 'undefined' && v instanceof Blob)) {
-          let fileName = (v && v.name) || 'blob';
-          let mime = v.type || 'application/octet-stream';
-          let buf = await v.arrayBuffer();
-          formParts.push({ kind: 'file', key: k, fileName, mime, buffer: buf, lastModified: v.lastModified || Date.now() });
+          const fileName = (v && v.name) || 'blob';
+          const mime = v.type || 'application/octet-stream';
+          const ab = await v.arrayBuffer();
+          formParts.push({ kind: 'file', key: k, fileName, mime, base64: toBase64(ab), lastModified: v.lastModified || Date.now() });
         } else {
           formParts.push({ kind: 'text', key: k, value: String(v) });
         }
       }
     } else if (data != null) {
-      // 传递纯文本/JSON/ArrayBuffer 等
       raw = data;
     }
     try {

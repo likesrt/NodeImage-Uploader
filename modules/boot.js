@@ -275,7 +275,10 @@
       }
     } catch {}
     if (utils.isNodeImageSite()) { auth.handleNodeImageSite(); return; }
-    window.addEventListener("focus", () => auth.checkLoginIfNeeded());
+    // 在扩展弹窗环境（chrome-extension://）避免自动刷新 API Key 以减少页面桥拉起
+    if (!location.protocol.startswith('chrome-extension')) {
+      window.addEventListener("focus", () => auth.checkLoginIfNeeded());
+    }
     // 使用适配器自动初始化（可扩展多站点）
     if (NI.integration && typeof NI.integration.autoInit==='function') {
       NI.integration.autoInit();
@@ -286,6 +289,9 @@
       // 回退模式下补充粘贴监听，避免重复绑定
       document.addEventListener("paste", NI.handler.onPaste, true);
     }
-    auth.checkLogoutFlag(); auth.setupStorageListener(); await auth.checkLoginIfNeeded();
+    auth.checkLogoutFlag(); auth.setupStorageListener();
+    if (!location.protocol.startswith('chrome-extension')) {
+      await auth.checkLoginIfNeeded();
+    }
   };
 })();

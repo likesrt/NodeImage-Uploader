@@ -113,7 +113,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // fallback to background fetch
         }
       }
-      // 若收到序列化的 formParts，则在后台重建 FormData
+      // 若收到序列化的 formParts，则在后台重建 FormData（支持 base64 或 ArrayBuffer 两种传输）
       const parts = Array.isArray(opts.formParts) ? opts.formParts : null;
       if (parts && parts.length) {
         const fd = new FormData();
@@ -137,6 +137,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         body = fd;
         // 让浏览器自动设置 multipart/form-data 的 boundary，移除可能的手动 content-type
+        try { delete headers['content-type']; delete headers['Content-Type']; } catch {}
+      }
+      // 兼容 base64 文件传输
+      if (parts && parts.length && !(body instanceof FormData)) {
+        const fd = new FormData();
+        for (const p of parts) {
+          if (p && p.kind === 'file' && p.base64) {
+            try {
+              const bin = atob(p.base64);
+              const len = bin.length;
+              const bytes = new Uint8Array(len);
+              for (let i=0;i<len;i++) bytes[i] = bin.charCodeAt(i);
+              const file = new File([bytes], p.fileName || 'blob', { type: p.mime || 'application/octet-stream', lastModified: p.lastModified || Date.now() });
+              fd.append(p.key, file, p.fileName || 'blob');
+            } catch (e) {}
+          } else if (p && p.kind === 'text') {
+            fd.append(p.key, p.value != null ? String(p.value) : '');
+          }
+        }
+        body = fd;
         try { delete headers['content-type']; delete headers['Content-Type']; } catch {}
       }
       const resp = await fetch(url, {
