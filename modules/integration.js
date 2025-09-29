@@ -14,7 +14,7 @@
    */
 
   /**
-   * 编辑器桥：统一不同编辑器的插入行为。
+   * 编辑器：统一不同编辑器的插入行为。
    * - 优先 CodeMirror
    * - 其次 textarea
    * - 最后 contenteditable 或 execCommand 兜底（移动端适配）
@@ -56,7 +56,7 @@
         if(action){ e.preventDefault(); if(action==='openPanel') NI.ui.openPanel(); if(typeof action==='function') action(e); }
       }, true);
     },
-    /** 将粘贴事件委派到通用处理（幂等绑定） */
+    /** 将粘贴事件委派到通用处理 */
     paste(target){
       const t = target || document;
       if (t.__ni_paste_bound__) return;

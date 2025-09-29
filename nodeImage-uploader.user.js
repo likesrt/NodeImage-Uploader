@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeImage图片上传助手
 // @namespace    https://api.nodeimage.com/
-// @version      3.1.0
+// @version      3.0.0
 // @description  获取/保存 API Key、粘贴/拖拽上传、图片列表与删除、Markdown 插入（通过远程模块加载）
 // @author       yuyan
 // @match        *://www.nodeseek.com/*
@@ -28,11 +28,8 @@
   'use strict';
 
   const DEFAULT_BASE = 'https://raw.githubusercontent.com/likesrt/NodeImage-Uploader/refs/heads/main/modules/';
-  // 缓存相关：TTL 默认 24 小时（仅在“自动更新”模式下使用）
-  const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-  // 缓存策略：manual=仅本地（命中缓存不联网），auto=自动更新（过期后联网再验证）
-  const getPolicy = () => GM_getValue('ni_cache_policy', 'manual');
-  const setPolicy = (p) => GM_setValue('ni_cache_policy', p);
+  // 缓存相关：仅自动更新，TTL 720 小时（≈30 天）
+  const CACHE_TTL_MS = 720 * 60 * 60 * 1000;
   const MODULES = [
     'config.js',
     'storage.js',
@@ -82,13 +79,7 @@
    * 清空当前基地址下的模块缓存。
    * 注意：仅清理 MODULES 集合内的文件，避免误删其他数据。
    */
-  function clearCacheForBase(base){
-    try {
-      for (const m of MODULES) {
-        try { GM_deleteValue(cacheKey(base, m)); } catch {}
-      }
-    } catch {}
-  }
+  // 已不提供全量清空菜单；使用“从远程拉取最新模块（覆盖缓存）”触发强制刷新。
 
   /**
    * 动态加载模块并在脚本沙箱内执行（带本地缓存）。
@@ -103,17 +94,11 @@
     const url = base.replace(/\/+$/, '/') + mod;
     return new Promise((resolve, reject) => {
       const cached = getCache(base, mod);
-      const policy = getPolicy();
       const forceUpdate = !!GM_getValue('ni_force_update', 0);
       const fresh = cached && (Date.now() - (cached.ts||0) < CACHE_TTL_MS);
 
-      // 仅本地策略：缓存存在则直接执行，不进行联网
-      if (!forceUpdate && policy === 'manual' && cached?.text) {
-        try { eval(cached.text); return resolve(); } catch (e) {}
-      }
-
-      // 自动更新策略：命中新鲜缓存直接执行（零网络等待）
-      if (!forceUpdate && policy === 'auto' && fresh && cached?.text) {
+      // 自动更新：命中新鲜缓存直接执行（零网络等待）
+      if (!forceUpdate && fresh && cached?.text) {
         try { eval(cached.text); return resolve(); } catch (e) {}
       }
 
@@ -178,17 +163,7 @@
     if (v) { setBase(v); location.reload(); }
   });
 
-  GM_registerMenuCommand('清空模块缓存（当前基地址）', () => {
-    const base = getBase();
-    if (confirm('确定清空当前基地址下的模块缓存？')) { clearCacheForBase(base); alert('已清空。'); }
-  });
-
-  GM_registerMenuCommand('切换缓存策略（当前：'+getPolicy()+')', () => {
-    const cur = getPolicy();
-    const next = cur === 'manual' ? 'auto' : 'manual';
-    setPolicy(next);
-    alert('已切换为：'+next+'\n手动=命中缓存不联网；自动=过期后联网再验证');
-  });
+  // 已移除：切换缓存策略、清空缓存菜单（统一使用自动更新 TTL=720h）
 
   GM_registerMenuCommand('从远程拉取最新模块（覆盖缓存）', () => {
     if (confirm('将从远程拉取最新模块并覆盖缓存，随后刷新页面。\n是否继续？')) {

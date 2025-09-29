@@ -128,5 +128,102 @@
       if (r?.error) throw new Error(r.error);
       return false;
     },
+    /**
+     * 基于 Cookie 的分页列表接口（优先尝试新接口，失败回退旧接口）。
+     * 使用场景：当用户已登录（浏览器 Cookie 可用）时，直接按页获取，减少数据量。
+     * 若返回 401/非 200 或数据格式不符，则回退至旧接口 NI.api.list() 并在前端分页。
+     *
+     * @param {number} [page=1] 页码（从 1 开始）
+     * @param {number} [limit=config.LIST_PAGE_SIZE] 每页数量
+     * @returns {Promise<{images: Array, pagination: {currentPage:number,totalPages:number,totalCount:number,hasNextPage:boolean,hasPrevPage:boolean}}>} 兼容结构
+     */
+    async listViaCookieOrFallback(page = 1, limit = config.LIST_PAGE_SIZE) {
+      // 新接口（仅 Cookie 认证）- 明确使用 fetch + credentials: 'include'
+      const url = `https://api.nodeimage.com/api/images?page=${encodeURIComponent(page)}&limit=${encodeURIComponent(limit)}`;
+      try {
+        const t0 = Date.now();
+        // console.log('[NodeImage][cookie-api] 准备请求', { url, page, limit });
+        const resp = await fetch(url, {
+          method: 'GET',
+          credentials: 'include',
+          // 参考提供脚本：尽可能贴近浏览器实际请求头，但遵循 fetch 规范（部分 sec-* / user-agent 无法手动设置）
+          headers: {
+            'accept': 'application/json, text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'pragma': 'no-cache',
+          },
+          cache: 'no-cache',
+          mode: 'cors',
+          referrerPolicy: 'strict-origin-when-cross-origin',
+        });
+        const ct = resp.headers.get('content-type') || '';
+        // console.log('[NodeImage][cookie-api] 响应', { status: resp.status, ct, ms: Date.now()-t0 });
+        if (!resp.ok) throw new Error('http ' + resp.status);
+        // 兼容返回类型：优先按 JSON 解析，不行则按文本再尝试 JSON 解析
+        let data;
+        if (ct.includes('application/json')) data = await resp.json();
+        else {
+          const txt = await resp.text();
+          // console.log('[NodeImage][cookie-api] 非JSON响应，尝试解析文本前缀', txt.slice(0, 200));
+          try { data = JSON.parse(txt); }
+          catch { throw new Error('bad format'); }
+        }
+        if (!data || !Array.isArray(data.images)) throw new Error('bad format');
+        const images = data.images.map((it) => ({
+          image_id: it.imageId || it.image_id || it.id || '',
+          filename: it.filename || '',
+          size: it.size ?? 0,
+          url: it.url || '',
+          links: it.url ? { direct: it.url, markdown: `![](${it.url})` } : undefined,
+          upload_time: it.uploadTime || it.upload_time || undefined,
+          mimetype: it.mimetype || it.mime || undefined,
+          user_id: it.userId || it.user_id || undefined,
+        }));
+        const p = data.pagination || {};
+        const totalCount = Number(p.totalCount ?? images.length) || 0;
+        const totalPages = Number(p.totalPages ?? Math.max(1, Math.ceil(totalCount / Math.max(1, limit))));
+        const currentPage = Number(p.currentPage ?? page) || 1;
+        // console.log('[NodeImage][cookie-api] 数据', { images: images.length, totalCount, totalPages, currentPage, sample: images[0] || null });
+        return {
+          images,
+          pagination: {
+            currentPage,
+            totalPages,
+            totalCount,
+            hasNextPage: Boolean(p.hasNextPage ?? currentPage < totalPages),
+            hasPrevPage: Boolean(p.hasPrevPage ?? currentPage > 1),
+          },
+        };
+      } catch (e) {
+        // console.warn('[NodeImage][cookie-api] 失败，回退旧接口', e);
+        // 回退旧接口：一次性取全量，由前端分页
+        try {
+          const all = await NI.api.list();
+          const totalCount = Array.isArray(all) ? all.length : 0;
+          const totalPages = Math.max(1, Math.ceil(totalCount / Math.max(1, limit)));
+          const safePage = Math.min(Math.max(1, page), totalPages);
+          const start = (safePage - 1) * limit;
+          const images = (all || []).slice(start, start + limit);
+          // console.log('[NodeImage][fallback] 旧接口分页', { totalCount, page: safePage, totalPages, slice: [start, start+limit-1], sample: images[0] || null });
+          return {
+            images,
+            pagination: {
+              currentPage: safePage,
+              totalPages,
+              totalCount,
+              hasNextPage: safePage < totalPages,
+              hasPrevPage: safePage > 1,
+            },
+          };
+        } catch (err) {
+          // 彻底失败时，返回空集，保持调用端安全
+          // console.error('[NodeImage][fallback] 旧接口也失败，返回空集', err);
+          return {
+            images: [],
+            pagination: { currentPage: 1, totalPages: 1, totalCount: 0, hasNextPage: false, hasPrevPage: false },
+          };
+        }
+      }
+    },
   };
 })();

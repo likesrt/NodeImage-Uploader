@@ -9,6 +9,8 @@
   /** 注入面板与工具栏样式（使用 old.js 旧版样式） */
   function addStyles() {
     GM_addStyle(`
+      /* 通用：尽量保证响应式布局 */
+      *, *::before, *::after { box-sizing: border-box; }
       #nodeimage-status {
         margin-left: 10px;
         display: inline-block;
@@ -148,13 +150,13 @@
         opacity: 1;
         pointer-events: auto;
       }
-      .panel-content { flex: 1; display: grid; grid-template-rows: 1fr auto; }
+      .panel-content { flex: 1; display: grid; grid-template-rows: 1fr auto; min-height: 0; overflow: hidden; }
       .images-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
         gap: 16px;
         padding: 12px 24px;
-        overflow-y: auto;
+        overflow-y: auto; -webkit-overflow-scrolling: touch;
         flex: 1;       /* 占据剩余空间，开启内部滚动 */
         min-height: 0; /* 防止子元素撑开导致父容器溢出 */
         position: relative;
@@ -194,13 +196,68 @@
       .copy-dropdown-single.show { display: block; }
       .copy-dropdown-single div { padding: 6px 12px; cursor: pointer; font-size: 13px; user-select: none; }
       .copy-dropdown-single div:hover { background-color: #f5f5f5; }
-      .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 12px 0; border-top: 1px solid #e0e0e0; user-select: none; flex-shrink: 0; }
-      .page-btn { padding: 6px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+      .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 12px 0; border-top: 1px solid #e0e0e0; user-select: none; flex-shrink: 0; flex-wrap: wrap; }
+      .page-btn { padding: 6px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 14px; min-width: 88px; }
       .page-btn:hover:not(:disabled) { background: #f5f5f5; border-color: #999; }
       .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .page-btn.active { background: #1976d2; color: white; border-color: #1976d2; }
       .panel-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9998; display: none; }
       .panel-overlay.show { display: block; }
+
+      /* 编辑器工具栏（参考整体风格进行优化）：
+         - 按钮整体换行，按钮内部不换行
+         - 保持美观的间距与对齐
+         - 避免容器高度被裁切 */
+      .md-editor .mde-toolbar { 
+        display: flex; 
+        flex-wrap: wrap !important; 
+        align-items: center; 
+        gap: 8px 6px; 
+        height: auto !important; 
+        overflow: visible !important;
+      }
+      .md-editor .mde-toolbar > * { flex: 0 0 auto; }
+      .md-editor .mde-toolbar .toolbar-item,
+      .md-editor .mde-toolbar .editor-top-button,
+      .md-editor .mde-toolbar .mdui-btn,
+      .md-editor .mde-toolbar #nodeimage-manage-btn {
+        display: inline-flex; 
+        align-items: center; 
+        white-space: nowrap; /* 按钮内部不换行 */
+      }
+      /* 分隔符微样式（不触发行级换行） */
+      .md-editor .mde-toolbar .sep { 
+        flex: 0 0 auto !important; 
+        width: 1px; height: 18px; 
+        background: rgba(0,0,0,0.08); 
+        margin: 0 4px; 
+        align-self: center;
+      }
+      /* NodeImage 自身的工具区也支持换行 */
+      .md-editor .mde-toolbar #nodeimage-toolbar-container { 
+        display: inline-flex; 
+        flex-wrap: wrap; 
+        gap: 6px 8px; 
+        align-items: center;
+      }
+
+      /* 小屏优化 */
+      @media (max-width: 1024px) {
+        #nodeimage-panel { width: 96vw; max-width: 96vw; height: 92vh; }
+        .panel-header { padding: 12px 14px; }
+        .panel-toolbar { padding: 10px 12px; gap: 8px; }
+        .images-grid { padding: 8px 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+        .image-preview { height: 140px; }
+        .pagination { padding: 10px 8px; gap: 6px; }
+        .page-btn { min-width: 80px; font-size: 13px; padding: 5px 10px; }
+        /* 小屏微调图标/行高 */
+        .md-editor .mde-toolbar { row-gap: 6px; }
+      }
+      @media (max-width: 600px) {
+        .images-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+        .image-preview { height: 120px; }
+        .panel-title { font-size: 18px; }
+      }
     `);
   }
 

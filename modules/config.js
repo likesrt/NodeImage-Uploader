@@ -36,7 +36,7 @@
          host: /(^|\.)nodeseek\.com$/i,
          toolbarContainer: '.mde-toolbar',
          editorSelector: '.CodeMirror, textarea, [contenteditable="true"]',
-         hotkeys: { 'Ctrl+Shift+U': 'openPanel' },
+        //  hotkeys: { 'Ctrl+Shift+U': 'openPanel' },
        },
      ],
   };

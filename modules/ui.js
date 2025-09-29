@@ -17,6 +17,10 @@
     selected: new Set(),
     /** 当前页 */
     page: 1,
+    /** 总页数（服务端/回退计算） */
+    totalPages: 1,
+    /** 总数量（服务端/回退计算） */
+    totalCount: 0,
     /**
      * 生成缩略图链接（旧版逻辑）：将 /i/ 替换为 /thumb/，并使用 _thumb_medium.webp
      * @param {string} directUrl 原图直链
@@ -182,8 +186,7 @@
         ip.click();
       };
       document.getElementById("select-all-btn").onclick = () => {
-        const start = (this.page - 1) * config.LIST_PAGE_SIZE;
-        const list = this.images.slice(start, start + config.LIST_PAGE_SIZE);
+        const list = this.images;
         const all = list.every((i) => this.selected.has(i.image_id));
         list.forEach((i) => {
           if (all) this.selected.delete(i.image_id);
@@ -260,8 +263,24 @@
       if (g)
         g.innerHTML =
           '<div style="padding:40px;text-align:center;">加载中...</div>';
-      this.images = await api.list();
-      this.page = 1;
+      try {
+        const { images, pagination } = await api.listViaCookieOrFallback(
+          this.page || 1,
+          config.LIST_PAGE_SIZE
+        );
+        this.images = images || [];
+        this.totalPages = Number(pagination?.totalPages || 1) || 1;
+        this.totalCount = Number(pagination?.totalCount || this.images.length) || 0;
+        this.page = Number(pagination?.currentPage || this.page || 1) || 1;
+      } catch {
+        const all = await api.list();
+        this.totalCount = Array.isArray(all) ? all.length : 0;
+        this.totalPages = Math.max(1, Math.ceil(this.totalCount / Math.max(1, config.LIST_PAGE_SIZE)));
+        const safePage = Math.min(Math.max(1, this.page || 1), this.totalPages);
+        const start = (safePage - 1) * config.LIST_PAGE_SIZE;
+        this.images = (all || []).slice(start, start + config.LIST_PAGE_SIZE);
+        this.page = safePage;
+      }
       this.renderImages();
       this.renderPagination();
       this.updateBatchButtons();
@@ -275,8 +294,7 @@
           '<div style="padding:40px;text-align:center;color:#999;">暂无图片</div>';
         return;
       }
-      const start = (this.page - 1) * config.LIST_PAGE_SIZE;
-      const cur = this.images.slice(start, start + config.LIST_PAGE_SIZE);
+      const cur = this.images;
       // 更新“全选/取消全选”按钮文本
       const selectAllBtn = document.getElementById("select-all-btn");
       if (selectAllBtn) {
@@ -369,41 +387,22 @@
       const p = document.getElementById("pagination");
       if (!p) return;
       p.innerHTML = "";
-      const total = Math.max(
-        1,
-        Math.ceil(this.images.length / config.LIST_PAGE_SIZE)
-      );
+      const total = Math.max(1, Number(this.totalPages || 1));
       const prev = document.createElement("button");
       prev.className = "page-btn";
       prev.textContent = "上一页";
       prev.disabled = this.page === 1;
-      prev.onclick = () => {
-        if (this.page > 1) {
-          this.page--;
-          this.selected.clear();
-          this.renderImages();
-          this.renderPagination();
-          this.updateBatchButtons();
-        }
-      };
+      prev.onclick = () => { if (this.page > 1) { this.page--; this.selected.clear(); this.loadImages(); } };
       p.appendChild(prev);
       const info = document.createElement("span");
-      info.textContent = `第 ${this.page} 页，共 ${total} 页，总计 ${this.images.length} 张图片。`;
+      info.textContent = `第 ${this.page} 页，共 ${total} 页，总计 ${this.totalCount} 张图片。`;
       info.style.margin = "0 12px";
       p.appendChild(info);
       const next = document.createElement("button");
       next.className = "page-btn";
       next.textContent = "下一页";
       next.disabled = this.page >= total;
-      next.onclick = () => {
-        if (this.page < total) {
-          this.page++;
-          this.selected.clear();
-          this.renderImages();
-          this.renderPagination();
-          this.updateBatchButtons();
-        }
-      };
+      next.onclick = () => { if (this.page < total) { this.page++; this.selected.clear(); this.loadImages(); } };
       p.appendChild(next);
     },
     /** 尝试插入 Markdown 到编辑器（通过 NI.editor 统一桥接） */
