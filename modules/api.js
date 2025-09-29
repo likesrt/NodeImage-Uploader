@@ -104,8 +104,9 @@
       } catch (e) {
         // 备用：尝试 Cookie 模式（页面桥 withCredentials: true，不附加 X-API-Key）
         try {
+          const cookieEndpoint = 'https://api.nodeimage.com/upload';
           const res2 = await request({
-            url: config.ENDPOINTS.upload,
+            url: cookieEndpoint,
             method: "POST",
             data: fd,
             withAuth: false,
