@@ -165,6 +165,76 @@
         return;
       }
 
+      // 处理右键菜单保存图片指令
+      if (msg && msg.__ni_save_image && msg.imageUrl) {
+        (async () => {
+          try {
+            console.log('[NodeImage-Ext] 收到保存图片指令:', msg.imageUrl);
+
+            // 等待NI模块加载完成
+            let retryCount = 0;
+            const maxRetries = 50;
+
+            while ((!window.NI || !window.NI.handler || typeof window.NI.handler.handleFiles !== 'function') && retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              retryCount++;
+            }
+
+            if (!window.NI || !window.NI.handler || typeof window.NI.handler.handleFiles !== 'function') {
+              console.error('[NodeImage-Ext] NI模块未准备好');
+              try { sendResponse({ ok: false, error: 'NI not ready' }); } catch {}
+              return;
+            }
+
+            // 下载图片并转换为File对象
+            const response = await fetch(msg.imageUrl);
+            const blob = await response.blob();
+
+            // 从URL中提取文件名，如果没有则使用默认名称
+            let filename = 'image';
+            try {
+              const url = new URL(msg.imageUrl);
+              const pathname = url.pathname;
+              const lastSlash = pathname.lastIndexOf('/');
+              if (lastSlash !== -1) {
+                const nameWithExt = pathname.substring(lastSlash + 1);
+                if (nameWithExt && nameWithExt.includes('.')) {
+                  filename = nameWithExt;
+                } else if (nameWithExt) {
+                  filename = nameWithExt + '.jpg';
+                }
+              }
+            } catch (e) {
+              // 如果URL解析失败，使用MIME类型推断扩展名
+              const mimeType = blob.type || 'image/jpeg';
+              if (mimeType.includes('png')) filename = 'image.png';
+              else if (mimeType.includes('gif')) filename = 'image.gif';
+              else if (mimeType.includes('webp')) filename = 'image.webp';
+              else filename = 'image.jpg';
+            }
+
+            // 创建File对象
+            const file = new File([blob], filename, {
+              type: blob.type || 'image/jpeg',
+              lastModified: Date.now()
+            });
+
+            console.log('[NodeImage-Ext] 开始上传图片:', filename, file.size, 'bytes');
+
+            // 使用NI的文件处理函数上传图片，设置insert=false不自动插入到编辑器
+            await window.NI.handler.handleFiles([file], { insert: false });
+
+            console.log('[NodeImage-Ext] 图片上传完成');
+            try { sendResponse({ ok: true }); } catch {}
+
+          } catch (error) {
+            console.error('[NodeImage-Ext] 保存图片失败:', error);
+            try { sendResponse({ ok: false, error: error.message }); } catch {}
+          }
+        })();
+        return true; // 异步响应
+      }
+
 
       return false;
     });

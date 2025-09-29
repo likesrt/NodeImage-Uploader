@@ -12,7 +12,8 @@
   "permissions": [
     "storage",
     "declarativeNetRequest",
-    "scripting"
+    "scripting",
+    "contextMenus"
   ],
   "host_permissions": [
     "<all_urls>",

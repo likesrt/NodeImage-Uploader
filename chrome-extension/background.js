@@ -23,6 +23,13 @@ const EXTENSION_CONFIG = {
 chrome.runtime.onInstalled.addListener(() => {
   // 简单日志，便于排查
   console.log('[NodeImage-Ext] onInstalled');
+
+  // 创建右键菜单
+  chrome.contextMenus.create({
+    id: "nodeimage-save-image",
+    title: "使用 NodeImage 保存图片",
+    contexts: ["image"]
+  });
 });
 
 /**
@@ -231,4 +238,57 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
   })();
   return true; // 异步响应
+});
+
+/**
+ * 处理右键菜单点击事件
+ */
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === "nodeimage-save-image" && info.srcUrl) {
+    try {
+      console.log('[NodeImage-Ext] 右键菜单点击，图片URL:', info.srcUrl);
+
+      // 向当前标签页发送消息，让内容脚本处理图片上传
+      chrome.tabs.sendMessage(tab.id, {
+        __ni_save_image: true,
+        imageUrl: info.srcUrl
+      }, (response) => {
+        const err = chrome.runtime && chrome.runtime.lastError;
+        if (err) {
+          // 如果内容脚本未注入，先注入再重试
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: [
+              'modules/config.js',
+              'modules/storage.js',
+              'modules/utils.js',
+              'modules/filetype.js',
+              'modules/api.js',
+              'modules/integration.js',
+              'modules/ui.js',
+              'modules/handler.js',
+              'modules/auth.js',
+              'modules/boot.js',
+              'content.js'
+            ],
+          }, () => {
+            // 注入后再次尝试发送消息
+            setTimeout(() => {
+              try {
+                chrome.tabs.sendMessage(tab.id, {
+                  __ni_save_image: true,
+                  imageUrl: info.srcUrl
+                });
+              } catch (e) {
+                console.error('[NodeImage-Ext] 发送消息失败:', e);
+              }
+            }, 100);
+          });
+        }
+      });
+
+    } catch (error) {
+      console.error('[NodeImage-Ext] 右键菜单处理失败:', error);
+    }
+  }
 });
