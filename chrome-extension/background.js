@@ -82,8 +82,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           'https://*.nodeimage.com/*'
         ]});
         let tab = tabs && tabs[0];
+        let createdTemp = false;
         if (!tab) {
           tab = await chrome.tabs.create({ url: 'https://www.nodeimage.com/?ni_from=extension', active: false });
+          createdTemp = true;
           await new Promise((res) => {
             const onUpdated = (tid, info) => { if (tid === tab.id && info.status === 'complete') { chrome.tabs.onUpdated.removeListener(onUpdated); res(); } };
             chrome.tabs.onUpdated.addListener(onUpdated);
@@ -92,10 +94,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const formParts = Array.isArray(opts.formParts) ? opts.formParts : null;
         return await new Promise((resolve, reject) => {
           // 仅传递必要参数，避免自定义 headers 触发额外预检；其余由页面自动生成
-          chrome.tabs.sendMessage(tab.id, { __ni_site_fetch: true, opts: { method, url, responseType, formParts } }, (res) => {
+          chrome.tabs.sendMessage(tab.id, { __ni_site_fetch: true, opts: { method, url, responseType, formParts } }, async (res) => {
             const err = chrome.runtime && chrome.runtime.lastError;
-            if (err) return reject(err.message || String(err));
-            if (!res || res.error) return reject(res && res.error);
+            if (err) { if (createdTemp && tab && tab.id) { try { await chrome.tabs.remove(tab.id); } catch {} } return reject(err.message || String(err)); }
+            if (!res || res.error) { if (createdTemp && tab && tab.id) { try { await chrome.tabs.remove(tab.id); } catch {} } return reject(res && res.error); }
+            if (createdTemp && tab && tab.id) { try { await chrome.tabs.remove(tab.id); } catch {} }
             resolve(res);
           });
         });

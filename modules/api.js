@@ -22,6 +22,7 @@
     data = null,
     headers = {},
     withAuth = false,
+    withCredentials = false,
   }) {
     return new Promise((resolve, reject) => {
       const h = {
@@ -34,7 +35,7 @@
         url,
         headers: h,
         data,
-        withCredentials: true,
+        withCredentials,
         responseType: "json",
         onload: (r) => {
           if (r.status === 200 && r.response) resolve(r.response);
@@ -52,7 +53,7 @@
      */
     async refreshApiKey() {
       try {
-        const r = await request({ url: config.ENDPOINTS.apiKey });
+        const r = await request({ url: config.ENDPOINTS.apiKey, withCredentials: true });
         if (r && r.api_key) {
           state.apiKey = r.api_key;
           // 使用 KV 封装，避免直接依赖 GM_setValue
@@ -90,6 +91,7 @@
         method: "POST",
         data: fd,
         withAuth: true,
+        withCredentials: false,
       });
       if (res && (res.success || res.links)) return res;
       const msg = (res && (res.error || res.message)) || "上传失败";
@@ -109,6 +111,7 @@
           url: config.ENDPOINTS.list,
           method: "GET",
           withAuth: true,
+          withCredentials: false,
         });
         if (Array.isArray(r?.images)) return r.images;
         return [];
@@ -123,7 +126,7 @@
      */
     async del(id) {
       const url = config.ENDPOINTS.del(id);
-      const r = await request({ url, method: "DELETE", withAuth: true });
+      const r = await request({ url, method: "DELETE", withAuth: true, withCredentials: false });
       if (r?.success) return true;
       if (r?.error) throw new Error(r.error);
       return false;

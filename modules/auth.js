@@ -87,5 +87,24 @@
         this.checkLoginIfNeeded(true);
       this.monitorLogout();
     },
+    /**
+     * 手动设置 API Key（回退方案）。
+     * 用途：无法通过 Cookie 自动获取时，允许用户手动粘贴保存。
+     * @returns {Promise<boolean>} 是否保存成功
+     */
+    async promptManualApiKey() {
+      try {
+        const cur = NI.state.apiKey || (NI.kv && NI.kv.get && NI.kv.get('nodeimage_apiKey','')) || '';
+        const v = prompt('请输入 NodeImage API Key', cur);
+        if (!v) return false;
+        NI.state.apiKey = v.trim();
+        if (NI.kv && typeof NI.kv.set === 'function') NI.kv.set('nodeimage_apiKey', NI.state.apiKey);
+        if (NI.ui && NI.ui.updateState) NI.ui.updateState();
+        if (NI.ui && NI.ui.setStatus) NI.ui.setStatus('success', 'API Key 已更新', 1500);
+        return true;
+      } catch {
+        return false;
+      }
+    },
   };
 })();
