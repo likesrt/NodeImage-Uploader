@@ -1,6 +1,6 @@
 {
   "name": "NodeImage 图片上传助手（扩展版）",
-  "description": "与油猴脚本一致的界面与功能：粘贴/拖拽上传、图片列表、删除、Markdown 插入；",
+  "description": "NodeImage的界面与功能：粘贴/拖拽上传、图片列表、删除、Markdown 插入；",
   "version": "0.1.0",
   "manifest_version": 3,
   "icons": {
