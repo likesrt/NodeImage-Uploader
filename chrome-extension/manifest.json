@@ -13,7 +13,8 @@
     "storage",
     "declarativeNetRequest",
     "scripting",
-    "contextMenus"
+    "contextMenus",
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -88,6 +89,15 @@
     "rule_resources": [
       { "id": "cors_rules", "enabled": true, "path": "rules.json" }
     ]
+  },
+  "commands": {
+    "upload-selected-image": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+U",
+        "mac": "Command+Shift+U"
+      },
+      "description": "上传选中的图片到 NodeImage"
+    }
   }
-  
+
 }

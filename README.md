@@ -1,4 +1,24 @@
-# NodeImage 图片上传助手（模块化）
+# NodeImage 图片上传助手
+
+## 新增 chrome扩展插件 支持图片管理 上传 任意页面右键图片直接上传到图床.
+
+
+![](https://cdn.nodeimage.com/i/BCTrW5kFCZ4VnycBDi0CRt4n8CrfP01E.png)
+
+![](https://cdn.nodeimage.com/i/jPAJJzaVSTTPlWhs6NmiVtV5IpNs9Hc4.png)
+
+![](https://cdn.nodeimage.com/i/C0QgDhlnpzGkG3vk1Y3yu0S7NooopHGP.png)
+
+
+【浏览器扩展（ZIP）使用方法】
+- 前往 Releases 下载 `chrome-nodeimage-extension.zip`。
+- 将 ZIP 解压到本地任意目录（确保目录内包含 `manifest.json`）。
+- 打开浏览器扩展页面：
+  - Chrome/Brave/Vivaldi: 访问 `chrome://extensions`
+  - Microsoft Edge: 访问 `edge://extensions`
+- 开启“开发者模式”。
+- 点击“加载已解压的扩展程序”（Load unpacked），选择刚解压的文件夹根目录。
+- 注意：Chrome/Edge 不支持直接从 ZIP 安装，必须解压后加载。
 
 一个面向 NodeSeek/NodeImage 的用户脚本，支持粘贴/拖拽上传、图片管理面板、复制/删除、Markdown 插入等。主脚本仅做引导，功能代码按模块从远程按需加载，便于热更新与多站点适配。
 

@@ -168,6 +168,7 @@
       // 处理右键菜单保存图片指令
       if (msg && msg.__ni_save_image && msg.imageUrl) {
         (async () => {
+          let toastShown = false;
           try {
             console.log('[NodeImage-Ext] 收到保存图片指令:', msg.imageUrl);
 
@@ -175,60 +176,131 @@
             let retryCount = 0;
             const maxRetries = 50;
 
-            while ((!window.NI || !window.NI.handler || typeof window.NI.handler.handleFiles !== 'function') && retryCount < maxRetries) {
+            while ((!window.NI || !window.NI.handler || typeof window.NI.handler.handleFiles !== 'function' || !window.NI.utils) && retryCount < maxRetries) {
               await new Promise(resolve => setTimeout(resolve, 100));
               retryCount++;
             }
 
             if (!window.NI || !window.NI.handler || typeof window.NI.handler.handleFiles !== 'function') {
               console.error('[NodeImage-Ext] NI模块未准备好');
+              alert('NodeImage 模块未准备好，请稍后重试');
               try { sendResponse({ ok: false, error: 'NI not ready' }); } catch {}
               return;
             }
 
-            // 下载图片并转换为File对象
-            const response = await fetch(msg.imageUrl);
-            const blob = await response.blob();
+            // 显示开始上传提示
+            if (window.NI.utils && typeof window.NI.utils.toast === 'function') {
+              window.NI.utils.toast('正在下载并上传图片...', 'info');
+              toastShown = true;
+            }
 
-            // 从URL中提取文件名，如果没有则使用默认名称
-            let filename = 'image';
+            // 清理URL参数（移除?和!后面的参数）
+            let cleanUrl = msg.imageUrl;
             try {
               const url = new URL(msg.imageUrl);
+              // 移除query参数
+              url.search = '';
+              cleanUrl = url.toString();
+              // 移除感叹号参数（如 !wp5）
+              const exclamationIndex = cleanUrl.indexOf('!');
+              if (exclamationIndex !== -1) {
+                cleanUrl = cleanUrl.substring(0, exclamationIndex);
+              }
+            } catch (e) {
+              console.warn('[NodeImage-Ext] URL清理失败，使用原URL:', e);
+            }
+
+            console.log('[NodeImage-Ext] 清理后的URL:', cleanUrl);
+
+            // 下载图片并转换为File对象
+            const response = await fetch(cleanUrl);
+            if (!response.ok) {
+              throw new Error(`下载失败: ${response.status} ${response.statusText}`);
+            }
+            const blob = await response.blob();
+
+            console.log('[NodeImage-Ext] 下载完成，文件大小:', blob.size, 'bytes, MIME类型:', blob.type);
+
+            // 智能文件名和格式检测
+            let filename = 'image';
+            let finalExtension = '';
+
+            // 1. 首先从实际MIME类型确定正确的扩展名
+            const actualMimeType = blob.type || '';
+            if (actualMimeType.includes('svg')) {
+              finalExtension = '.svg';
+            } else if (actualMimeType.includes('png')) {
+              finalExtension = '.png';
+            } else if (actualMimeType.includes('gif')) {
+              finalExtension = '.gif';
+            } else if (actualMimeType.includes('webp')) {
+              finalExtension = '.webp';
+            } else if (actualMimeType.includes('jpeg') || actualMimeType.includes('jpg')) {
+              finalExtension = '.jpg';
+            } else {
+              // 如果MIME类型不明确，从URL推断
+              finalExtension = '.jpg'; // 默认
+            }
+
+            // 2. 从URL中提取基础文件名
+            try {
+              const url = new URL(cleanUrl);
               const pathname = url.pathname;
               const lastSlash = pathname.lastIndexOf('/');
               if (lastSlash !== -1) {
                 const nameWithExt = pathname.substring(lastSlash + 1);
-                if (nameWithExt && nameWithExt.includes('.')) {
-                  filename = nameWithExt;
-                } else if (nameWithExt) {
-                  filename = nameWithExt + '.jpg';
+                if (nameWithExt) {
+                  // 移除原有扩展名，使用检测到的正确扩展名
+                  const dotIndex = nameWithExt.lastIndexOf('.');
+                  if (dotIndex !== -1) {
+                    filename = nameWithExt.substring(0, dotIndex);
+                  } else {
+                    filename = nameWithExt;
+                  }
                 }
               }
             } catch (e) {
-              // 如果URL解析失败，使用MIME类型推断扩展名
-              const mimeType = blob.type || 'image/jpeg';
-              if (mimeType.includes('png')) filename = 'image.png';
-              else if (mimeType.includes('gif')) filename = 'image.gif';
-              else if (mimeType.includes('webp')) filename = 'image.webp';
-              else filename = 'image.jpg';
+              console.warn('[NodeImage-Ext] 文件名解析失败:', e);
+              filename = 'downloaded_image';
             }
 
-            // 创建File对象
-            const file = new File([blob], filename, {
-              type: blob.type || 'image/jpeg',
+            // 3. 组合最终文件名
+            const finalFilename = filename + finalExtension;
+            console.log('[NodeImage-Ext] 最终文件名:', finalFilename, '实际格式:', actualMimeType);
+
+            // 创建File对象，使用检测到的正确MIME类型
+            const file = new File([blob], finalFilename, {
+              type: actualMimeType || 'image/jpeg',
               lastModified: Date.now()
             });
 
-            console.log('[NodeImage-Ext] 开始上传图片:', filename, file.size, 'bytes');
+            console.log('[NodeImage-Ext] 开始上传图片:', finalFilename, file.size, 'bytes', 'MIME:', file.type);
 
             // 使用NI的文件处理函数上传图片，设置insert=false不自动插入到编辑器
             await window.NI.handler.handleFiles([file], { insert: false });
 
             console.log('[NodeImage-Ext] 图片上传完成');
-            try { sendResponse({ ok: true }); } catch {}
+
+            // 显示成功提示
+            if (window.NI.utils && typeof window.NI.utils.toast === 'function') {
+              window.NI.utils.toast(`图片已保存到图库：${finalFilename}`, 'success');
+            } else if (!toastShown) {
+              alert('图片上传成功！');
+            }
+
+            try { sendResponse({ ok: true, filename: finalFilename }); } catch {}
 
           } catch (error) {
             console.error('[NodeImage-Ext] 保存图片失败:', error);
+
+            // 显示失败提示
+            const errorMsg = error.message || '上传失败';
+            if (window.NI && window.NI.utils && typeof window.NI.utils.toast === 'function') {
+              window.NI.utils.toast(`图片保存失败：${errorMsg}`, 'error');
+            } else {
+              alert(`图片保存失败：${errorMsg}`);
+            }
+
             try { sendResponse({ ok: false, error: error.message }); } catch {}
           }
         })();
