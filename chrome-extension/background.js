@@ -33,6 +33,104 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 /**
+ * 处理键盘快捷键
+ */
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (command === 'upload-selected-image' && tab && tab.id) {
+    try {
+      console.log('[NodeImage-Ext] 快捷键触发，命令:', command, '标签页:', tab.id);
+
+      // 向当前标签页发送消息，让内容脚本检测并上传选中的图片
+      chrome.tabs.sendMessage(tab.id, {
+        __ni_upload_selected: true
+      }, (response) => {
+        const err = chrome.runtime && chrome.runtime.lastError;
+        if (err) {
+          console.warn('[NodeImage-Ext] 快捷键处理失败，尝试注入脚本:', err.message);
+
+          // 检查标签页是否仍然有效
+          chrome.tabs.get(tab.id, (tabInfo) => {
+            const tabErr = chrome.runtime && chrome.runtime.lastError;
+            if (tabErr) {
+              console.error('[NodeImage-Ext] 标签页无效:', tabErr.message);
+              return;
+            }
+
+            // 检查是否是受限页面
+            if (tabInfo.url.startsWith('chrome://') || tabInfo.url.startsWith('chrome-extension://') ||
+                tabInfo.url.startsWith('edge://') || tabInfo.url.startsWith('about:') ||
+                tabInfo.url.startsWith('moz-extension://')) {
+              console.warn('[NodeImage-Ext] 受限页面，无法使用快捷键:', tabInfo.url);
+              // 显示通知提示用户
+              chrome.notifications.create({
+                type: 'basic',
+                iconUrl: 'static/ico.png',
+                title: 'NodeImage - 提示',
+                message: '当前页面不支持快捷键上传，请使用右键菜单'
+              });
+              return;
+            }
+
+            // 注入脚本并重试
+            chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: [
+                'modules/config.js',
+                'modules/storage.js',
+                'modules/utils.js',
+                'modules/filetype.js',
+                'modules/api.js',
+                'modules/integration.js',
+                'modules/ui.js',
+                'modules/handler.js',
+                'modules/auth.js',
+                'modules/boot.js',
+                'content.js'
+              ],
+            }, () => {
+              const injectErr = chrome.runtime && chrome.runtime.lastError;
+              if (injectErr) {
+                console.error('[NodeImage-Ext] 脚本注入失败:', injectErr.message);
+                chrome.notifications.create({
+                  type: 'basic',
+                  iconUrl: 'static/ico.png',
+                  title: 'NodeImage - 错误',
+                  message: '无法在当前页面使用快捷键功能'
+                });
+                return;
+              }
+
+              console.log('[NodeImage-Ext] 脚本注入完成，重新发送快捷键消息');
+              setTimeout(() => {
+                try {
+                  chrome.tabs.sendMessage(tab.id, {
+                    __ni_upload_selected: true
+                  }, (retryResponse) => {
+                    const retryErr = chrome.runtime && chrome.runtime.lastError;
+                    if (retryErr) {
+                      console.error('[NodeImage-Ext] 快捷键重试失败:', retryErr.message);
+                    } else {
+                      console.log('[NodeImage-Ext] 快捷键重试成功:', retryResponse);
+                    }
+                  });
+                } catch (e) {
+                  console.error('[NodeImage-Ext] 快捷键消息发送失败:', e);
+                }
+              }, 200);
+            });
+          });
+        } else {
+          console.log('[NodeImage-Ext] 快捷键处理成功:', response);
+        }
+      });
+
+    } catch (error) {
+      console.error('[NodeImage-Ext] 快捷键处理失败:', error);
+    }
+  }
+});
+
+/**
  * 点击扩展图标：尝试通知当前活动页打开管理面板；若页面未注入则回退打开目标站点。
  */
 try {

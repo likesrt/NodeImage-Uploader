@@ -307,8 +307,357 @@
         return true; // 异步响应
       }
 
+      // 处理快捷键上传选中图片指令
+      if (msg && msg.__ni_upload_selected) {
+        (async () => {
+          let toastShown = false;
+          try {
+            console.log('[NodeImage-Ext] 收到快捷键上传指令');
+
+            // 等待NI模块加载完成
+            let retryCount = 0;
+            const maxRetries = 50;
+
+            while ((!window.NI || !window.NI.handler || typeof window.NI.handler.handleFiles !== 'function' || !window.NI.utils) && retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              retryCount++;
+            }
+
+            if (!window.NI || !window.NI.handler || typeof window.NI.handler.handleFiles !== 'function') {
+              console.error('[NodeImage-Ext] NI模块未准备好');
+              alert('NodeImage 模块未准备好，请稍后重试');
+              try { sendResponse({ ok: false, error: 'NI not ready' }); } catch {}
+              return;
+            }
+
+            // 检测当前选中或聚焦的图片元素
+            const targetImages = findTargetImages();
+
+            if (targetImages.length === 0) {
+              // 没有找到目标图片时的提示
+              if (window.NI.utils && typeof window.NI.utils.toast === 'function') {
+                window.NI.utils.toast('未找到可上传的图片，请先点击或选中图片', 'warning');
+              } else {
+                alert('未找到可上传的图片\\n\\n请先：\\n1. 左键点击图片选中\\n2. 或右键点击图片\\n3. 然后使用快捷键');
+              }
+              try { sendResponse({ ok: false, error: 'No target image found' }); } catch {}
+              return;
+            }
+
+            // 显示开始上传提示
+            if (window.NI.utils && typeof window.NI.utils.toast === 'function') {
+              window.NI.utils.toast(`正在上传 ${targetImages.length} 张图片...`, 'info');
+              toastShown = true;
+            }
+
+            let successCount = 0;
+            let failCount = 0;
+
+            // 批量处理所有找到的图片
+            for (const img of targetImages) {
+              try {
+                console.log('[NodeImage-Ext] 处理图片:', img.src);
+                await uploadImageElement(img);
+                successCount++;
+              } catch (error) {
+                console.error('[NodeImage-Ext] 上传图片失败:', img.src, error);
+                failCount++;
+              }
+            }
+
+            // 显示结果提示
+            const resultMsg = targetImages.length === 1
+              ? (successCount > 0 ? '图片上传成功！' : '图片上传失败')
+              : `上传完成：成功 ${successCount} 张，失败 ${failCount} 张`;
+
+            if (window.NI.utils && typeof window.NI.utils.toast === 'function') {
+              window.NI.utils.toast(resultMsg, successCount > 0 ? 'success' : 'error');
+            } else if (!toastShown) {
+              alert(resultMsg);
+            }
+
+            console.log('[NodeImage-Ext] 快捷键上传完成，成功:', successCount, '失败:', failCount);
+            try { sendResponse({ ok: true, successCount, failCount }); } catch {}
+
+          } catch (error) {
+            console.error('[NodeImage-Ext] 快捷键上传处理失败:', error);
+
+            const errorMsg = error.message || '上传失败';
+            if (window.NI && window.NI.utils && typeof window.NI.utils.toast === 'function') {
+              window.NI.utils.toast(`快捷键上传失败：${errorMsg}`, 'error');
+            } else {
+              alert(`快捷键上传失败：${errorMsg}`);
+            }
+
+            try { sendResponse({ ok: false, error: error.message }); } catch {}
+          }
+        })();
+        return true; // 异步响应
+      }
 
       return false;
     });
   } catch {}
+
+  /**
+   * 查找当前页面中的目标图片（选中的、聚焦的、或最近交互的）
+   * @returns {HTMLImageElement[]} 图片元素数组
+   */
+  function findTargetImages() {
+    const targetImages = [];
+
+    // 1. 检查当前活动元素（聚焦的）
+    const activeElement = document.activeElement;
+    if (activeElement && activeElement.tagName === 'IMG' && activeElement.src) {
+      targetImages.push(activeElement);
+      console.log('[NodeImage-Ext] 找到聚焦的图片:', activeElement.src);
+    }
+
+    // 2. 检查选中的内容
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+
+      // 如果选中的是图片节点
+      if (container.nodeType === Node.ELEMENT_NODE) {
+        const images = container.querySelectorAll ?
+          container.querySelectorAll('img') :
+          (container.tagName === 'IMG' ? [container] : []);
+
+        for (const img of images) {
+          if (img.src && !targetImages.includes(img)) {
+            targetImages.push(img);
+            console.log('[NodeImage-Ext] 找到选中范围内的图片:', img.src);
+          }
+        }
+      }
+      // 如果选中内容包含图片
+      else if (container.parentElement) {
+        const parentImages = container.parentElement.querySelectorAll('img');
+        for (const img of parentImages) {
+          if (img.src && selection.containsNode(img, true) && !targetImages.includes(img)) {
+            targetImages.push(img);
+            console.log('[NodeImage-Ext] 找到选中内容中的图片:', img.src);
+          }
+        }
+      }
+    }
+
+    // 3. 检查最近点击/悬停的图片（使用事件监听记录）
+    const recentImage = getRecentInteractionImage();
+    if (recentImage && !targetImages.includes(recentImage)) {
+      targetImages.push(recentImage);
+      console.log('[NodeImage-Ext] 找到最近交互的图片:', recentImage.src);
+    }
+
+    // 4. 如果前面都没找到，检查鼠标指针下的元素
+    if (targetImages.length === 0) {
+      const elementUnderMouse = getElementUnderMouse();
+      if (elementUnderMouse && elementUnderMouse.tagName === 'IMG' && elementUnderMouse.src) {
+        targetImages.push(elementUnderMouse);
+        console.log('[NodeImage-Ext] 找到鼠标下的图片:', elementUnderMouse.src);
+      }
+    }
+
+    // 5. 最后的备选：查找当前可见区域内的图片
+    if (targetImages.length === 0) {
+      const visibleImages = getVisibleImages();
+      if (visibleImages.length > 0) {
+        // 优先选择较大的图片
+        visibleImages.sort((a, b) => (b.naturalWidth * b.naturalHeight) - (a.naturalWidth * a.naturalHeight));
+        const largestImage = visibleImages[0];
+        if (largestImage.naturalWidth >= 100 && largestImage.naturalHeight >= 100) {
+          targetImages.push(largestImage);
+          console.log('[NodeImage-Ext] 找到可见区域内的大图片:', largestImage.src);
+        }
+      }
+    }
+
+    console.log('[NodeImage-Ext] 总共找到', targetImages.length, '张目标图片');
+    return targetImages;
+  }
+
+  /**
+   * 获取最近交互过的图片元素
+   */
+  let recentInteractionImage = null;
+  let recentInteractionTime = 0;
+
+  function getRecentInteractionImage() {
+    // 如果最近的交互时间超过30秒，则认为无效
+    if (Date.now() - recentInteractionTime > 30000) {
+      return null;
+    }
+    return recentInteractionImage;
+  }
+
+  /**
+   * 获取鼠标指针下的元素
+   */
+  let lastMousePosition = { x: 0, y: 0 };
+
+  function getElementUnderMouse() {
+    try {
+      return document.elementFromPoint(lastMousePosition.x, lastMousePosition.y);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * 获取当前可见区域内的图片
+   */
+  function getVisibleImages() {
+    const images = document.querySelectorAll('img[src]');
+    const visibleImages = [];
+
+    for (const img of images) {
+      if (isElementVisible(img)) {
+        visibleImages.push(img);
+      }
+    }
+
+    return visibleImages;
+  }
+
+  /**
+   * 检查元素是否在可见区域内
+   */
+  function isElementVisible(element) {
+    try {
+      const rect = element.getBoundingClientRect();
+      const viewport = {
+        width: window.innerWidth || document.documentElement.clientWidth,
+        height: window.innerHeight || document.documentElement.clientHeight
+      };
+
+      return rect.top >= 0 &&
+             rect.left >= 0 &&
+             rect.bottom <= viewport.height &&
+             rect.right <= viewport.width &&
+             rect.width > 0 &&
+             rect.height > 0;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * 上传指定的图片元素
+   */
+  async function uploadImageElement(imgElement) {
+    if (!imgElement || !imgElement.src) {
+      throw new Error('无效的图片元素');
+    }
+
+    // 清理URL参数
+    let cleanUrl = imgElement.src;
+    try {
+      const url = new URL(imgElement.src);
+      url.search = '';
+      cleanUrl = url.toString();
+      const exclamationIndex = cleanUrl.indexOf('!');
+      if (exclamationIndex !== -1) {
+        cleanUrl = cleanUrl.substring(0, exclamationIndex);
+      }
+    } catch (e) {
+      console.warn('[NodeImage-Ext] URL清理失败，使用原URL:', e);
+    }
+
+    console.log('[NodeImage-Ext] 清理后的URL:', cleanUrl);
+
+    // 下载图片并转换为File对象
+    const response = await fetch(cleanUrl);
+    if (!response.ok) {
+      throw new Error(`下载失败: ${response.status} ${response.statusText}`);
+    }
+    const blob = await response.blob();
+
+    console.log('[NodeImage-Ext] 下载完成，文件大小:', blob.size, 'bytes, MIME类型:', blob.type);
+
+    // 智能文件名和格式检测（复用之前的逻辑）
+    let filename = 'image';
+    let finalExtension = '';
+
+    const actualMimeType = blob.type || '';
+    if (actualMimeType.includes('svg')) {
+      finalExtension = '.svg';
+    } else if (actualMimeType.includes('png')) {
+      finalExtension = '.png';
+    } else if (actualMimeType.includes('gif')) {
+      finalExtension = '.gif';
+    } else if (actualMimeType.includes('webp')) {
+      finalExtension = '.webp';
+    } else if (actualMimeType.includes('jpeg') || actualMimeType.includes('jpg')) {
+      finalExtension = '.jpg';
+    } else {
+      finalExtension = '.jpg';
+    }
+
+    try {
+      const url = new URL(cleanUrl);
+      const pathname = url.pathname;
+      const lastSlash = pathname.lastIndexOf('/');
+      if (lastSlash !== -1) {
+        const nameWithExt = pathname.substring(lastSlash + 1);
+        if (nameWithExt) {
+          const dotIndex = nameWithExt.lastIndexOf('.');
+          if (dotIndex !== -1) {
+            filename = nameWithExt.substring(0, dotIndex);
+          } else {
+            filename = nameWithExt;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[NodeImage-Ext] 文件名解析失败:', e);
+      filename = 'uploaded_image';
+    }
+
+    const finalFilename = filename + finalExtension;
+    console.log('[NodeImage-Ext] 最终文件名:', finalFilename, '实际格式:', actualMimeType);
+
+    // 创建File对象
+    const file = new File([blob], finalFilename, {
+      type: actualMimeType || 'image/jpeg',
+      lastModified: Date.now()
+    });
+
+    console.log('[NodeImage-Ext] 开始上传图片:', finalFilename, file.size, 'bytes', 'MIME:', file.type);
+
+    // 使用NI的文件处理函数上传图片
+    await window.NI.handler.handleFiles([file], { insert: false });
+
+    console.log('[NodeImage-Ext] 图片上传完成');
+    return finalFilename;
+  }
+
+  // 添加事件监听器来跟踪用户的图片交互
+  try {
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.tagName === 'IMG' && e.target.src) {
+        recentInteractionImage = e.target;
+        recentInteractionTime = Date.now();
+        console.log('[NodeImage-Ext] 记录点击的图片:', e.target.src);
+      }
+    }, true);
+
+    document.addEventListener('contextmenu', (e) => {
+      if (e.target && e.target.tagName === 'IMG' && e.target.src) {
+        recentInteractionImage = e.target;
+        recentInteractionTime = Date.now();
+        console.log('[NodeImage-Ext] 记录右键的图片:', e.target.src);
+      }
+    }, true);
+
+    document.addEventListener('mousemove', (e) => {
+      lastMousePosition = { x: e.clientX, y: e.clientY };
+    }, true);
+
+    console.log('[NodeImage-Ext] 图片交互事件监听器已添加');
+  } catch (e) {
+    console.warn('[NodeImage-Ext] 添加事件监听器失败:', e);
+  }
+
 })();
