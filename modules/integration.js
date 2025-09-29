@@ -20,10 +20,47 @@
    * - 最后 contenteditable 或 execCommand 兜底（移动端适配）
    */
   NI.editor = {
-    /** 查找 CodeMirror 实例 */
-    getCodeMirror(){ const el=document.querySelector('.CodeMirror'); return el && (el.CodeMirror||el.__cm||el._cm); },
-    /** 获取当前激活的 textarea */
-    activeTextarea(){ return document.activeElement?.tagName==='TEXTAREA'?document.activeElement:document.querySelector('textarea'); },
+    // 保存编辑器DOM元素的引用（类似old.js的DOM.editor）
+    editorElement: null,
+
+    /** 查找并缓存 CodeMirror 实例 - 使用old.js的有效方式 */
+    getCodeMirror(){
+      // 如果已经缓存了编辑器元素，直接返回其CodeMirror实例
+      if(this.editorElement && this.editorElement.CodeMirror) {
+        return this.editorElement.CodeMirror;
+      }
+
+      // 查找CodeMirror元素
+      const el = document.querySelector('.CodeMirror');
+      if(el){
+        // 保存元素引用（类似old.js的DOM.editor）
+        this.editorElement = el;
+        // 尝试多种方式获取CodeMirror实例
+        const cm = el.CodeMirror || el.__cm || el._cm;
+        return cm;
+      }
+      return null;
+    },
+    /** 获取当前激活的 textarea - 增强查找逻辑 */
+    activeTextarea(){
+      // 优先返回当前焦点的 textarea
+      if(document.activeElement?.tagName==='TEXTAREA') return document.activeElement;
+
+      // 查找CodeMirror内部的textarea（隐藏的但是实际使用的）
+      const cmTextarea = document.querySelector('.CodeMirror textarea');
+      if(cmTextarea) return cmTextarea;
+
+      // 其次查找可见的 textarea
+      const textareas = document.querySelectorAll('textarea');
+      for(const ta of textareas){
+        const style = getComputedStyle(ta);
+        if(style.display !== 'none' && style.visibility !== 'hidden' && ta.offsetParent !== null){
+          return ta;
+        }
+      }
+      // 最后返回第一个 textarea
+      return document.querySelector('textarea');
+    },
     /** 获取 contenteditable 元素 */
     contentEditable(){ return document.querySelector('[contenteditable="true"]'); },
     /**
@@ -33,15 +70,29 @@
      */
     insertMarkdown(md){
       if(!md) return false;
-      const cm=this.getCodeMirror();
-      if (cm && typeof cm.replaceSelection==='function'){ cm.replaceSelection(`\n${md}\n`); return true; }
-      const ta=this.activeTextarea(); if (ta){ NI.utils.insertAtCursor(ta, `\n${md}\n`); return true; }
-      const ce=this.contentEditable(); if (ce){
-        try{ document.execCommand('insertText', false, `\n${md}\n`); return true; }catch{}
-        try{ const node=document.createTextNode(`\n${md}\n`); const sel=window.getSelection(); if(sel&&sel.rangeCount){ const r=sel.getRangeAt(0); r.deleteContents(); r.insertNode(node); r.setStartAfter(node); r.setEndAfter(node); return true; } }catch{}
+
+      // 使用和old.js相同的简单逻辑
+      const cm = this.getCodeMirror();
+      if (cm && typeof cm.getCursor === 'function' && typeof cm.replaceRange === 'function') {
+        const cursor = cm.getCursor();
+        cm.replaceRange(`\n${md}\n`, cursor);
+        if (typeof cm.focus === 'function') {
+          cm.focus();
+        }
+        return true;
       }
+
+      // 备用方案：textarea
+      const ta = this.activeTextarea();
+      if (ta) {
+        NI.utils.insertAtCursor(ta, `\n${md}\n`);
+        ta.focus();
+        return true;
+      }
+
       return false;
     },
+
   };
 
   /** 绑定集合：快捷键/粘贴/拖拽 */
@@ -124,9 +175,15 @@
           if (tb && !tb.querySelector('#nodeimage-toolbar-container')) {
             try { NI.ui.setupToolbar(tb); } catch {}
           }
-          // CodeMirror 可能在 SPA 渲染后被替换，需重新绑定拖拽
+          // CodeMirror 可能在 SPA 渲染后被替换，需重新缓存和绑定
           const cm = document.querySelector('.CodeMirror');
-          if (cm) { try { NI.handler.bindDrag(cm); } catch {} }
+          if (cm) {
+            // 如果是新的CodeMirror元素，更新缓存
+            if (cm !== NI.editor.editorElement) {
+              NI.editor.editorElement = cm;
+            }
+            try { NI.handler.bindDrag(cm); } catch {}
+          }
           // 粘贴绑定委派到目标根（带幂等标记），在编辑器根出现时补一次
           if (cfg && cfg.editorSelector) {
             const root = document.querySelector(cfg.editorSelector);
@@ -156,16 +213,23 @@
         // 回退到默认逻辑（兼容 NodeSeek）
         try{ const tb=await NI.utils.wait('.mde-toolbar'); NI.ui.setupToolbar(tb); }catch{}
       }
-      // 绑定编辑器区域事件
-      if (cfg && cfg.editorSelector){
-        const root = document.querySelector(cfg.editorSelector) || document;
-        NI.bindings.paste(root);
-        NI.bindings.drop(root);
-      } else {
-        NI.bindings.paste(document);
-        const cm = await (async()=>{ try{ return await NI.utils.wait('.CodeMirror'); }catch{} return null; })();
-        if (cm) NI.handler.bindDrag(cm);
-      }
+      // 绑定编辑器区域事件 - 使用和old.js类似的逻辑
+      NI.bindings.paste(document);
+
+      // 等待CodeMirror元素并保存引用
+      NI.utils.wait('.CodeMirror').then(editor => {
+        // 保存编辑器元素引用
+        NI.editor.editorElement = editor;
+        // 绑定拖拽事件
+        NI.handler.bindDrag(editor);
+      }).catch(() => {
+        // 如果没有找到CodeMirror，尝试其他编辑器
+        if (cfg && cfg.editorSelector){
+          const root = document.querySelector(cfg.editorSelector);
+          if (root) NI.handler.bindDrag(root);
+        }
+      });
+
       // 快捷键
       if (cfg && cfg.hotkeys) NI.bindings.shortcut(document, cfg.hotkeys);
     }

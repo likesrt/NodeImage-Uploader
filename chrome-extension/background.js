@@ -122,13 +122,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             try {
               const u8 = new Uint8Array(p.buffer);
               const file = new File([u8], p.fileName || 'blob', { type: p.mime || 'application/octet-stream', lastModified: p.lastModified || Date.now() });
-              fd.append(p.key, file, p.fileName || 'blob');
+              fd.append(p.key, file);
             } catch (e) {
               // 回退为 Blob
               try {
                 const u8 = new Uint8Array(p.buffer);
                 const blob = new Blob([u8], { type: p.mime || 'application/octet-stream' });
-                fd.append(p.key, blob, p.fileName || 'blob');
+                fd.append(p.key, blob);
               } catch {}
             }
           } else if (p && p.kind === 'text') {

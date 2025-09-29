@@ -35,7 +35,8 @@
        {
          host: /(^|\.)nodeseek\.com$/i,
          toolbarContainer: '.mde-toolbar',
-         editorSelector: '.CodeMirror, textarea, [contenteditable="true"]',
+         // 更精确的编辑器选择器，基于实际的DOM结构
+         editorSelector: '#cm-editor-wrapper, .CodeMirror-wrap, textarea',
         //  hotkeys: { 'Ctrl+Shift+U': 'openPanel' },
        },
      ],

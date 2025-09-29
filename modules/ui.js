@@ -343,8 +343,7 @@
           else this.selected.delete(img.image_id);
           this.updateBatchButtons();
           // 同步“全选/取消全选”按钮文本
-          const list = this.images.slice(start, start + config.LIST_PAGE_SIZE);
-          const all = list.every((i) => this.selected.has(i.image_id));
+          const all = this.images.every((i) => this.selected.has(i.image_id));
           const sa = document.getElementById("select-all-btn");
           if (sa) sa.textContent = all ? "取消全选" : "全选";
         };
