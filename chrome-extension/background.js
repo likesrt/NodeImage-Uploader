@@ -93,7 +93,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         const formParts = Array.isArray(opts.formParts) ? opts.formParts : null;
         return await new Promise((resolve, reject) => {
-          // 仅传递必要参数，避免自定义 headers 触发额外预检；其余由页面自动生成
+          // 传递formParts给页面bridge，让页面重建FormData
           chrome.tabs.sendMessage(tab.id, { __ni_site_fetch: true, opts: { method, url, responseType, formParts } }, async (res) => {
             const err = chrome.runtime && chrome.runtime.lastError;
             if (err) { if (createdTemp && tab && tab.id) { try { await chrome.tabs.remove(tab.id); } catch {} } return reject(err.message || String(err)); }

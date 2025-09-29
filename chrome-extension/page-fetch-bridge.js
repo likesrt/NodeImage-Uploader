@@ -16,6 +16,49 @@
       const headers = opts.headers || {};
       const responseType = opts.responseType || 'json';
       let body = opts.data || undefined;
+      
+      // 处理 formParts，重建 FormData
+      const formParts = Array.isArray(opts.formParts) ? opts.formParts : null;
+      if (formParts && formParts.length) {
+        const fd = new FormData();
+        for (const p of formParts) {
+          if (p && p.kind === 'file') {
+            if (p.base64) {
+              try {
+                const bin = atob(p.base64);
+                const len = bin.length;
+                const bytes = new Uint8Array(len);
+                for (let i=0;i<len;i++) bytes[i] = bin.charCodeAt(i);
+                const file = new File([bytes], p.fileName || 'blob', { 
+                  type: p.mime || 'application/octet-stream', 
+                  lastModified: p.lastModified || Date.now() 
+                });
+                fd.append(p.key, file, p.fileName || 'blob');
+              } catch (e) {
+                console.error('[Page Bridge] Failed to rebuild file from base64:', e);
+              }
+            } else if (p.buffer) {
+              try {
+                const u8 = new Uint8Array(p.buffer);
+                const file = new File([u8], p.fileName || 'blob', { 
+                  type: p.mime || 'application/octet-stream', 
+                  lastModified: p.lastModified || Date.now() 
+                });
+                fd.append(p.key, file, p.fileName || 'blob');
+              } catch (e) {
+                console.error('[Page Bridge] Failed to rebuild file from buffer:', e);
+              }
+            }
+          } else if (p && p.kind === 'text') {
+            fd.append(p.key, p.value != null ? String(p.value) : '');
+          }
+        }
+        body = fd;
+        // FormData 会自动设置正确的 Content-Type，删除可能的手动设置
+        delete headers['content-type'];
+        delete headers['Content-Type'];
+      }
+      
       try {
         // 页面上下文 fetch，自动携带当前站点 Cookie（SameSite 规则生效）
         const resp = await fetch(url, {

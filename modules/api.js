@@ -90,33 +90,37 @@
       }
       const fd = new FormData();
       fd.append("image", up, up.name);
+      
+      // 优先使用 Cookie 模式（页面桥 withCredentials: true，不附加 X-API-Key）
       try {
+        const cookieEndpoint = 'https://api.nodeimage.com/upload';
         const res = await request({
-          url: config.ENDPOINTS.upload,
+          url: cookieEndpoint,
           method: "POST",
           data: fd,
-          withAuth: true,
-          withCredentials: false,
+          withAuth: false,
+          withCredentials: true,
         });
         if (res && (res.success || res.links)) return res;
         const msg = (res && (res.error || res.message)) || "上传失败";
-        if (/unauthorized|invalid api key|未授权|无效/i.test(msg)) {
-          state.apiKey = "";
-          if (NI.kv && typeof NI.kv.set === 'function') NI.kv.set("nodeimage_apiKey", "");
-        }
         throw new Error(msg);
       } catch (e) {
-        // 备用：尝试 Cookie 模式（页面桥 withCredentials: true，不附加 X-API-Key）
+        // 备用：尝试 API Key 模式
         try {
-          const cookieEndpoint = 'https://api.nodeimage.com/upload';
           const res2 = await request({
-            url: cookieEndpoint,
+            url: config.ENDPOINTS.upload,
             method: "POST",
             data: fd,
-            withAuth: false,
-            withCredentials: true,
+            withAuth: true,
+            withCredentials: false,
           });
           if (res2 && (res2.success || res2.links)) return res2;
+          const msg = (res2 && (res2.error || res2.message)) || "上传失败";
+          if (/unauthorized|invalid api key|未授权|无效/i.test(msg)) {
+            state.apiKey = "";
+            if (NI.kv && typeof NI.kv.set === 'function') NI.kv.set("nodeimage_apiKey", "");
+          }
+          throw new Error(msg);
         } catch {}
         throw e;
       }
@@ -145,24 +149,27 @@
      * @returns {Promise<boolean>} 是否成功
      */
     async del(id) {
-      const url = config.ENDPOINTS.del(id);
+      // 优先使用 Cookie 模式：使用 /api/images/:id 端点
       try {
-        const r = await request({ url, method: "DELETE", withAuth: true, withCredentials: false });
+        const cookieDel = `https://api.nodeimage.com/api/images/${encodeURIComponent(id)}`;
+        const r = await request({ url: cookieDel, method: "DELETE", withAuth: false, withCredentials: true });
         if (r?.success) return true;
         if (r?.error) throw new Error(r.error);
         return false;
       } catch (e) {
-        // 备用 Cookie 模式：使用 /api/images/:id 端点
+        // 备用 API Key 模式
         try {
-          const cookieDel = `https://api.nodeimage.com/api/images/${encodeURIComponent(id)}`;
-          const r2 = await request({ url: cookieDel, method: "DELETE", withAuth: false, withCredentials: true });
+          const url = config.ENDPOINTS.del(id);
+          const r2 = await request({ url, method: "DELETE", withAuth: true, withCredentials: false });
           if (r2?.success) return true;
+          if (r2?.error) throw new Error(r2.error);
+          return false;
         } catch {}
         throw e;
       }
     },
     /**
-     * 基于 Cookie 的分页列表接口（优先尝试新接口，失败回退旧接口）。
+     * 基于 Cookie 的分页列表接口（优先尝试Cookie接口，失败回退API Key接口）。
      * 使用场景：当用户已登录（浏览器 Cookie 可用）时，直接按页获取，减少数据量。
      * 若返回 401/非 200 或数据格式不符，则回退至旧接口 NI.api.list() 并在前端分页。
      *
@@ -171,29 +178,6 @@
      * @returns {Promise<{images: Array, pagination: {currentPage:number,totalPages:number,totalCount:number,hasNextPage:boolean,hasPrevPage:boolean}}>} 兼容结构
      */
     async listViaCookieOrFallback(page = 1, limit = config.LIST_PAGE_SIZE) {
-      // 优先使用 API Key 接口（无 Cookie、无临时页面），仅当无 API Key 或失败时才使用 Cookie 分页接口。
-      if (NI.state && NI.state.apiKey) {
-        try {
-          const all = await NI.api.list();
-          const totalCount = Array.isArray(all) ? all.length : 0;
-          const totalPages = Math.max(1, Math.ceil(totalCount / Math.max(1, limit)));
-          const safePage = Math.min(Math.max(1, page), totalPages);
-          const start = (safePage - 1) * limit;
-          const images = (all || []).slice(start, start + limit);
-          return {
-            images,
-            pagination: {
-              currentPage: safePage,
-              totalPages,
-              totalCount,
-              hasNextPage: safePage < totalPages,
-              hasPrevPage: safePage > 1,
-            },
-          };
-        } catch (e) {
-          // Fall through to cookie path
-        }
-      }
       // Cookie 分页（由页面桥发起，携带本地 Cookie；仅定制 Origin）
       const ts = Date.now();
       const url = `https://api.nodeimage.com/api/images?page=${encodeURIComponent(page)}&limit=${encodeURIComponent(limit)}&_t=${ts}`;
@@ -240,6 +224,29 @@
           },
         };
       } catch (err) {
+        // 备用：使用 API Key 接口（无 Cookie、无临时页面），在前端分页
+        if (NI.state && NI.state.apiKey) {
+          try {
+            const all = await NI.api.list();
+            const totalCount = Array.isArray(all) ? all.length : 0;
+            const totalPages = Math.max(1, Math.ceil(totalCount / Math.max(1, limit)));
+            const safePage = Math.min(Math.max(1, page), totalPages);
+            const start = (safePage - 1) * limit;
+            const images = (all || []).slice(start, start + limit);
+            return {
+              images,
+              pagination: {
+                currentPage: safePage,
+                totalPages,
+                totalCount,
+                hasNextPage: safePage < totalPages,
+                hasPrevPage: safePage > 1,
+              },
+            };
+          } catch (e) {
+            // Continue to fallback
+          }
+        }
         // 彻底失败：返回空集
         return {
           images: [],
