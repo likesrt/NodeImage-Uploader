@@ -36,6 +36,17 @@ mkdir -p "$OUT_DIR/modules" "$OUT_DIR/static"
 copy_dir "$ROOT_DIR/modules/" "$OUT_DIR/modules"
 [ -d "$ROOT_DIR/static" ] && copy_dir "$ROOT_DIR/static/" "$OUT_DIR/static" || true
 
+# 规范化目录结构：防止出现 dist/extension/modules/modules/* 的双层目录
+if [ -d "$OUT_DIR/modules/modules" ]; then
+  echo "Normalize nested modules directory"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a "$OUT_DIR/modules/modules/" "$OUT_DIR/modules/"
+  else
+    cp -R "$OUT_DIR/modules/modules/"* "$OUT_DIR/modules/" 2>/dev/null || true
+  fi
+  rm -rf "$OUT_DIR/modules/modules"
+fi
+
 # 注入构建元信息（可选）
 if [ "${GITHUB_ACTIONS:-false}" = "true" ]; then
   cat > "$OUT_DIR/build.txt" <<EOF
