@@ -53,6 +53,9 @@
      * @param {Element} el 目标元素
      */
     bindDrag(el) {
+      // 防重复绑定：为元素打标记，避免多次 addEventListener 导致事件触发多次
+      if (!el || el.__ni_drop_bound__) return;
+      el.__ni_drop_bound__ = true;
       el.addEventListener("dragover", (e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";

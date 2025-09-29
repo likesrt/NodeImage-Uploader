@@ -74,6 +74,69 @@
    * - 将粘贴/拖拽绑定到 editorSelector 或 fallback
    */
   NI.integration = {
+    /**
+     * 一次性启动 SPA 观察器：
+     * - 监听 history.pushState/replaceState 与 popstate 触发 URL 变化
+     * - 监听 DOM 变化以在目标容器/编辑器出现时自动挂载
+     * 备注：避免重复安装，使用 _watching 作为幂等保护。
+     */
+    ensureWatchers(){
+      if (this._watching) return;
+      this._watching = true;
+      this._lastUrl = location.href;
+      const fireReinit = () => {
+        clearTimeout(this._t);
+        // 轻微防抖，等待路由完成渲染
+        this._t = setTimeout(() => this.autoInit(), 120);
+      };
+      // patch history 以捕获单页路由跳转
+      try {
+        if (!history.__ni_patched) {
+          const wrap = (fn) => function(){
+            const ret = fn.apply(this, arguments);
+            const cur = location.href;
+            if (cur !== NI.integration._lastUrl) {
+              NI.integration._lastUrl = cur;
+              window.dispatchEvent(new Event('ni:locationchange'));
+            }
+            return ret;
+          };
+          history.pushState = wrap(history.pushState);
+          history.replaceState = wrap(history.replaceState);
+          history.__ni_patched = true;
+        }
+      } catch {}
+      window.addEventListener('popstate', () => {
+        const cur = location.href;
+        if (cur !== this._lastUrl) {
+          this._lastUrl = cur;
+          window.dispatchEvent(new Event('ni:locationchange'));
+        }
+      }, true);
+      window.addEventListener('ni:locationchange', fireReinit, true);
+
+      // 观察 DOM 以在元素被替换/重建后重新挂载
+      try {
+        const mo = new MutationObserver(() => {
+          const cfg = NI.integration.getSiteConfig();
+          const tSel = (cfg && cfg.toolbarContainer) || '.mde-toolbar';
+          const tb = document.querySelector(tSel);
+          if (tb && !tb.querySelector('#nodeimage-toolbar-container')) {
+            try { NI.ui.setupToolbar(tb); } catch {}
+          }
+          // CodeMirror 可能在 SPA 渲染后被替换，需重新绑定拖拽
+          const cm = document.querySelector('.CodeMirror');
+          if (cm) { try { NI.handler.bindDrag(cm); } catch {} }
+          // 粘贴绑定委派到目标根（带幂等标记），在编辑器根出现时补一次
+          if (cfg && cfg.editorSelector) {
+            const root = document.querySelector(cfg.editorSelector);
+            if (root) { try { NI.bindings.paste(root); } catch {} }
+          }
+        });
+        mo.observe(document.body, { childList: true, subtree: true });
+        this._mo = mo;
+      } catch {}
+    },
     /** 获取站点配置（支持 GM 覆盖） */
     getSiteConfig(){
       const sites = (NI.config && NI.config.SITES) || [];
@@ -84,6 +147,8 @@
     },
     /** 自动挂载工具栏与绑定编辑器事件 */
     async autoInit(){
+      // 确保已安装 SPA 观察器（只安装一次）
+      try { this.ensureWatchers(); } catch {}
       const cfg=this.getSiteConfig();
       if (cfg && cfg.toolbarContainer){
         try{ const tb = await NI.utils.wait(cfg.toolbarContainer); NI.ui.setupToolbar(tb); }catch{}
