@@ -1,15 +1,11 @@
 # NodeImage 图片上传助手
 
-### 新增 chrome扩展插件 支持图片管理,上传 
-
-### 新增浏览器右键菜单 任意页面右键图片直接上传到图床
-
-### 新增浏览器左键选中图片后快捷键上传图片到图床
 
 ### 修复网格拉伸导致图片不足两行时首行被拉伸
 
-# 建议使用油猴脚本，浏览器扩展BUG没有完全解决
-
+# 建议使用油猴脚本，浏览器扩展不要用，不想修bug了
+# 建议使用油猴脚本，浏览器扩展不要用，不想修bug了
+# 建议使用油猴脚本，浏览器扩展不要用，不想修bug了
 [油猴脚本安装地址: https://raw.githubusercontent.com/likesrt/NodeImage-Uploader/main/nodeImage-uploader.user.js](https://raw.githubusercontent.com/likesrt/NodeImage-Uploader/main/nodeImage-uploader.user.js)
 
 ## 预览:
