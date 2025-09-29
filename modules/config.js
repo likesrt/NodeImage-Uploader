@@ -21,7 +21,7 @@
     LIST_PAGE_SIZE: 10,
     MAX_FILE_SIZE: 30 * 1024 * 1024,
     // 调试模式：启用后在控制台显示详细操作日志
-    DEBUG: true, // 设置为 false / true 启用调试模式
+    DEBUG: false, // 设置为 false / true 启用调试模式
     ENDPOINTS: {
       upload: "https://api.nodeimage.com/api/upload",
       apiKey: "https://api.nodeimage.com/api/user/api-key",
