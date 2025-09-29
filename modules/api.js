@@ -139,7 +139,8 @@
      */
     async listViaCookieOrFallback(page = 1, limit = config.LIST_PAGE_SIZE) {
       // 新接口（仅 Cookie 认证）- 明确使用 fetch + credentials: 'include'
-      const url = `https://api.nodeimage.com/api/images?page=${encodeURIComponent(page)}&limit=${encodeURIComponent(limit)}`;
+      const ts = Date.now();
+      const url = `https://api.nodeimage.com/api/images?page=${encodeURIComponent(page)}&limit=${encodeURIComponent(limit)}&_t=${ts}`;
       try {
         const t0 = Date.now();
         // console.log('[NodeImage][cookie-api] 准备请求', { url, page, limit });

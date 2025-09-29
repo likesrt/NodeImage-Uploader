@@ -1,0 +1,92 @@
+{
+  "name": "NodeImage 图片上传助手（扩展版）",
+  "description": "与油猴脚本一致的界面与功能：粘贴/拖拽上传、图片列表、删除、Markdown 插入；",
+  "version": "0.1.0",
+  "manifest_version": 3,
+  "icons": {
+    "16": "static/ico.png",
+    "32": "static/ico.png",
+    "48": "static/ico.png",
+    "128": "static/ico.png"
+  },
+  "permissions": [
+    "storage",
+    "declarativeNetRequest",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "https://www.nodeseek.com/*",
+    "https://*.nodeseek.com/*",
+    "https://nodeimage.com/*",
+    "https://*.nodeimage.com/*",
+    "https://api.nodeimage.com/*",
+    "http://localhost/*",
+    "https://likesrt.github.io/*",
+    "https://raw.githubusercontent.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "NodeImage Uploader",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "static/ico.png",
+      "32": "static/ico.png",
+      "48": "static/ico.png",
+      "128": "static/ico.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.nodeseek.com/*",
+        "*://nodeseek.com/*",
+        "*://nodeimage.com/*",
+        "*://*.nodeimage.com/*",
+        "*://*.deepflood.com/*"
+      ],
+      "js": [
+        "modules/config.js",
+        "modules/storage.js",
+        "modules/utils.js",
+        "modules/filetype.js",
+        "modules/api.js",
+        "modules/integration.js",
+        "modules/ui.js",
+        "modules/handler.js",
+        "modules/auth.js",
+        "modules/boot.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://nodeimage.com/*",
+        "*://www.nodeimage.com/*",
+        "*://*.nodeimage.com/*"
+      ],
+      "js": ["cookie-proxy.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "modules/*.js",
+        "page-fetch-bridge.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "cors_rules", "enabled": true, "path": "rules.json" }
+    ]
+  }
+  
+}

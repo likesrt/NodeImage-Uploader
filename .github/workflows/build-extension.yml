@@ -1,0 +1,39 @@
+name: build-extension
+
+on:
+  push:
+    branches:
+      - main
+      - feat/**
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install crx3 CLI
+        run: |
+          npm i -g crx3 || true
+
+      - name: Build extension (zip + crx)
+        env:
+          EXTENSION_PEM: ${{ secrets.EXTENSION_PEM }}
+        run: |
+          bash scripts/build-extension.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodeimage-extension
+          path: |
+            dist/nodeimage-extension.zip
+            dist/nodeimage-extension.crx
+          if-no-files-found: warn
