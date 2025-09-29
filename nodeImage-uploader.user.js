@@ -17,7 +17,6 @@
 // @connect      cnb.cool
 // @connect      api.nodeimage.com
 // @connect      raw.githubusercontent.com
-// @connect      likesrt.github.io
 // @connect      localhost
 // @homepageURL  https://github.com/likesrt/NodeImage-Uploader
 // @supportURL   https://github.com/likesrt/NodeImage-Uploader/issues
@@ -28,7 +27,7 @@
 (function(){
   'use strict';
 
-  const DEFAULT_BASE = 'https://likesrt.github.io/NodeImage-Uploader/modules/';
+  const DEFAULT_BASE = 'https://raw.githubusercontent.com/likesrt/NodeImage-Uploader/refs/heads/main/modules/';
   // 缓存相关：仅自动更新，TTL 720 小时（≈30 天）
   const CACHE_TTL_MS = 720 * 60 * 60 * 1000;
   const MODULES = [
