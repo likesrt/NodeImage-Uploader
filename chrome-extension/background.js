@@ -159,9 +159,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         body = fd;
         try { delete headers['content-type']; delete headers['Content-Type']; } catch {}
       }
+      // 确保设置正确的referer和origin
+      const requestHeaders = {
+        ...headers,
+        'Referer': 'https://www.nodeimage.com/',
+        'Origin': 'https://www.nodeimage.com'
+      };
+      
       const resp = await fetch(url, {
         method,
-        headers,
+        headers: requestHeaders,
         credentials: opts.withCredentials ? 'include' : 'omit',
         cache: 'no-cache',
         mode: 'cors',

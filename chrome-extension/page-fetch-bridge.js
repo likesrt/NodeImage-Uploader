@@ -60,10 +60,17 @@
       }
       
       try {
+        // 确保设置正确的referer和origin
+        const requestHeaders = {
+          ...headers,
+          'Referer': 'https://www.nodeimage.com/',
+          'Origin': 'https://www.nodeimage.com'
+        };
+        
         // 页面上下文 fetch，自动携带当前站点 Cookie（SameSite 规则生效）
         const resp = await fetch(url, {
           method,
-          headers,
+          headers: requestHeaders,
           credentials: 'include',
           cache: 'no-cache',
           mode: 'cors',

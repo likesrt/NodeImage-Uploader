@@ -156,7 +156,7 @@
           <div class="copy-dropdown" style="position: relative;">
             <button class="mdui-btn mdui-btn-success" id="copy-selected-btn" disabled>批量复制链接</button>
             <button class="mdui-btn mdui-btn-primary" id="refresh-list-btn">刷新图片列表</button>
-            <button class="mdui-btn" id="manual-apikey-btn" title="无法自动获取时手动设置">手动设置API Key</button>
+
             <button class="mdui-btn" id="open-login-btn" title="打开 NodeImage 登录页">登录</button>
             <div class="dropdown-content" id="copy-format-dropdown" style="position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; display: none; z-index: 10000;">
               <div class="dropdown-item" data-format="direct" style="padding: 8px 12px; cursor: pointer;">直接链接</div>
@@ -238,8 +238,7 @@
         NI.utils.showPanelMessage(`删除完成，成功${ok}张，失败${fail}张`, 3000);
       };
       document.getElementById("refresh-list-btn").onclick = () => this.loadImages();
-      const mbtn = document.getElementById('manual-apikey-btn');
-      if (mbtn) mbtn.onclick = () => { try { NI.auth.promptManualApiKey(); } catch {} };
+
       const lbtn = document.getElementById('open-login-btn');
       if (lbtn) lbtn.onclick = () => { try { NI.ui.openLogin(); } catch {} };
       // 批量复制：下拉选择格式

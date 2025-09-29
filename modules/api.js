@@ -27,6 +27,8 @@
     return new Promise((resolve, reject) => {
       const h = {
         Accept: "application/json",
+        Referer: "https://www.nodeimage.com/",
+        Origin: "https://www.nodeimage.com",
         ...(withAuth && state.apiKey ? { "X-API-Key": state.apiKey } : {}),
         ...headers,
       };

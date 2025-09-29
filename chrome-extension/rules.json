@@ -22,7 +22,8 @@
     "action": {
       "type": "modifyHeaders",
       "requestHeaders": [
-        { "header": "origin", "operation": "set", "value": "https://www.nodeimage.com" }
+        { "header": "origin", "operation": "set", "value": "https://www.nodeimage.com" },
+        { "header": "referer", "operation": "set", "value": "https://www.nodeimage.com/" }
       ]
     },
     "condition": {
