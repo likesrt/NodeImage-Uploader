@@ -70,10 +70,25 @@
 
     /** 打开面板并刷新列表 */
     async openPanel() {
-      if (!document.getElementById("nodeimage-panel")) this.createPanel();
+      if (config.DEBUG) {
+        console.group("🖼️ [NodeImage UI] 打开管理面板");
+      }
+      if (!document.getElementById("nodeimage-panel")) {
+        if (config.DEBUG) {
+          console.log("创建面板DOM结构...");
+        }
+        this.createPanel();
+      }
       document.getElementById("nodeimage-panel").classList.add("show");
       document.querySelector(".panel-overlay").classList.add("show");
+      if (config.DEBUG) {
+        console.log("面板已显示，开始加载图片列表...");
+      }
       await this.loadImages();
+      if (config.DEBUG) {
+        console.log("✅ 面板打开完成");
+        console.groupEnd();
+      }
     },
     /** 关闭面板并清理选择集 */
     closePanel() {
@@ -262,6 +277,9 @@
     },
 
     async loadImages() {
+      if (config.DEBUG) {
+        console.log("📋 [NodeImage UI] 开始加载图片列表, 第", this.page || 1, "页");
+      }
       const g = document.getElementById("images-grid");
       const pg = document.getElementById("pagination");
       if (g)
@@ -272,6 +290,13 @@
           this.page || 1,
           config.LIST_PAGE_SIZE
         );
+        if (config.DEBUG) {
+          console.log("✅ [NodeImage UI] 图片列表加载成功:", {
+            images: images.length,
+            pagination,
+            currentPage: this.page || 1
+          });
+        }
         this.images = images || [];
         this.totalPages = Number(pagination?.totalPages || 1) || 1;
         this.totalCount = Number(pagination?.totalCount || this.images.length) || 0;
@@ -305,13 +330,21 @@
         const all = cur.every((i) => this.selected.has(i.image_id));
         selectAllBtn.textContent = all ? "取消全选" : "全选";
       }
+      // 检测是否在popup环境中（popup 环境移除插入功能）
+      const isInPopup = typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.query === 'function';
+
       cur.forEach((img) => {
         const card = document.createElement("div");
         card.className = "image-card";
         const url = img.links?.direct || img.url || "";
         const thumb = this.getThumbnailUrl(url) || url;
         const md = img.links?.markdown || (url ? `![](${url})` : "");
-        card.innerHTML = `<img class=\"image-preview\" src=\"${thumb}\" alt=\"\" title=\"点击插入编辑器\" style=\"width:100%;height:140px;object-fit:cover;background:#f0f0f0;cursor:pointer;\"/>
+
+        // 根据环境决定预览图片的标题和按钮
+        const previewTitle = isInPopup ? "点击预览" : "点击插入编辑器";
+        const insertButton = isInPopup ? '' : '<button class="ins">插入</button>';
+
+        card.innerHTML = `<img class=\"image-preview\" src=\"${thumb}\" alt=\"\" title=\"${previewTitle}\" style=\"width:100%;height:140px;object-fit:cover;background:#f0f0f0;cursor:pointer;\"/>
           <div class="image-info"><div class="image-filename" title="${
             img.filename || img.image_id
           }">${
@@ -323,7 +356,7 @@
             <input type="checkbox" class="sel" ${
               this.selected.has(img.image_id) ? "checked" : ""
             } />
-            <button class=\"ins\">插入</button>
+            ${insertButton}
             <div class=\"copy-dropdown-single-container\" style=\"position:relative;display:inline-block;\">
               <button class=\"copy-btn\">复制▼</button>
               <div class=\"copy-dropdown-single\">
@@ -335,19 +368,43 @@
             </div>
             <button class="del" style="color:#d32f2f">删除</button>
           </div>`;
-        // 点击预览直接插入
-        card.querySelector(".image-preview").onclick = () =>
-          this.insertMarkdown(md);
+
+        // 根据环境设置预览点击行为
+        const previewEl = card.querySelector(".image-preview");
+        if (isInPopup) {
+          // Popup环境：点击预览显示灯箱
+          previewEl.onclick = () => this.showLightbox(url, img.filename || img.image_id);
+        } else {
+          // 普通环境：点击预览直接插入
+          previewEl.onclick = () => this.insertMarkdown(md);
+        }
+
         card.querySelector(".sel").onchange = (e) => {
           if (e.target.checked) this.selected.add(img.image_id);
           else this.selected.delete(img.image_id);
           this.updateBatchButtons();
-          // 同步“全选/取消全选”按钮文本
+          // 同步"全选/取消全选"按钮文本
           const all = this.images.every((i) => this.selected.has(i.image_id));
           const sa = document.getElementById("select-all-btn");
           if (sa) sa.textContent = all ? "取消全选" : "全选";
         };
-        card.querySelector(".ins").onclick = () => this.insertMarkdown(md);
+
+        // 只在非popup环境中添加插入按钮事件
+        if (!isInPopup) {
+          const insBtn = card.querySelector(".ins");
+          if (insBtn) {
+            insBtn.onclick = async () => {
+              try {
+                await this.insertMarkdown(md);
+              } catch (e) {
+                if (config.DEBUG) {
+                  console.error("❌ [NodeImage UI] 插入失败:", e);
+                }
+                utils.toast("插入失败: " + (e.message || e));
+              }
+            };
+          }
+        }
         // 单图复制下拉
         const copyBtn = card.querySelector(".copy-btn");
         const copyDropdown = card.querySelector(".copy-dropdown-single");
@@ -409,14 +466,42 @@
       p.appendChild(next);
     },
     /** 尝试插入 Markdown 到编辑器（通过 NI.editor 统一桥接） */
-    insertMarkdown(md) {
-      const ok = NI.editor.insertMarkdown(md);
-      if (ok) {
-        utils.toast("图片已插入编辑器");
-        this.closePanel();
-        return true;
-      } else {
-        utils.toast("无法找到编辑器或插入失败");
+    async insertMarkdown(md) {
+      try {
+        // 检测是否在popup环境中（popup 环境不再支持插入功能）
+        const isInPopup = typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.query === 'function';
+
+        if (isInPopup) {
+          if (config.DEBUG) {
+            console.warn("⚠️ [NodeImage UI] Popup 环境不支持插入功能");
+          }
+          utils.toast("Popup 环境不支持插入功能");
+          return false;
+        }
+
+        // 普通环境：直接插入
+        if (config.DEBUG) {
+          console.log("📝 [NodeImage UI] 使用普通环境直接插入");
+        }
+
+        if (NI.editor && NI.editor.insertMarkdown) {
+          const ok = NI.editor.insertMarkdown(md);
+          if (ok) {
+            utils.toast("图片已插入编辑器");
+            this.closePanel();
+            return true;
+          } else {
+            utils.toast("无法找到编辑器或插入失败");
+            return false;
+          }
+        } else {
+          throw new Error("编辑器模块未加载或方法不可用");
+        }
+      } catch (e) {
+        if (config.DEBUG) {
+          console.error("❌ [NodeImage UI] insertMarkdown异常:", e);
+        }
+        utils.toast("插入异常: " + (e.message || e));
         return false;
       }
     },
@@ -487,6 +572,143 @@
         utils.toast("复制失败");
       }
       document.body.removeChild(ta);
+    },
+
+    /** 显示图片灯箱预览（仅popup环境使用） */
+    showLightbox(imageUrl, filename) {
+      if (config.DEBUG) {
+        console.log("📸 [NodeImage UI] 显示图片灯箱:", filename, imageUrl);
+      }
+
+      // 创建灯箱遮罩层
+      const lightbox = document.createElement('div');
+      lightbox.className = 'ni-lightbox';
+      lightbox.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      `;
+
+      // 创建图片容器
+      const container = document.createElement('div');
+      container.style.cssText = `
+        position: relative;
+        max-width: 90%;
+        max-height: 90%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      `;
+
+      // 创建图片元素
+      const img = document.createElement('img');
+      img.src = imageUrl;
+      img.alt = filename;
+      img.style.cssText = `
+        max-width: 100%;
+        max-height: 80vh;
+        object-fit: contain;
+        border-radius: 8px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      `;
+
+      // 创建文件名标签
+      const label = document.createElement('div');
+      label.textContent = filename;
+      label.style.cssText = `
+        color: white;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 8px 16px;
+        border-radius: 4px;
+        margin-top: 12px;
+        font-size: 14px;
+        text-align: center;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      `;
+
+      // 创建关闭按钮
+      const closeBtn = document.createElement('button');
+      closeBtn.innerHTML = '×';
+      closeBtn.style.cssText = `
+        position: absolute;
+        top: -40px;
+        right: -20px;
+        background: rgba(255, 255, 255, 0.9);
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s ease;
+      `;
+
+      // 关闭按钮悬停效果
+      closeBtn.onmouseenter = () => closeBtn.style.background = 'rgba(255, 255, 255, 1)';
+      closeBtn.onmouseleave = () => closeBtn.style.background = 'rgba(255, 255, 255, 0.9)';
+
+      // 组装元素
+      container.appendChild(img);
+      container.appendChild(label);
+      container.appendChild(closeBtn);
+      lightbox.appendChild(container);
+
+      // 关闭灯箱的函数
+      const closeLightbox = () => {
+        lightbox.style.opacity = '0';
+        setTimeout(() => {
+          if (lightbox.parentNode) {
+            document.body.removeChild(lightbox);
+          }
+        }, 300);
+      };
+
+      // 绑定关闭事件
+      closeBtn.onclick = closeLightbox;
+      lightbox.onclick = (e) => {
+        if (e.target === lightbox) {
+          closeLightbox();
+        }
+      };
+
+      // ESC键关闭
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          closeLightbox();
+          document.removeEventListener('keydown', handleKeyDown);
+        }
+      };
+      document.addEventListener('keydown', handleKeyDown);
+
+      // 显示灯箱
+      document.body.appendChild(lightbox);
+
+      // 渐入动画
+      setTimeout(() => {
+        lightbox.style.opacity = '1';
+      }, 10);
+
+      // 图片加载失败处理
+      img.onerror = () => {
+        label.textContent = `${filename} (加载失败)`;
+        label.style.color = '#ffcdd2';
+      };
     },
   };
 })();

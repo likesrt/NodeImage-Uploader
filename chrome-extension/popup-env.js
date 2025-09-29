@@ -8,6 +8,7 @@
 (function(){
   'use strict';
 
+
   /**
    * 注入样式到弹窗文档。
    * @param {string} css CSS 文本

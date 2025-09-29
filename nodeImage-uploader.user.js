@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeImage图片上传助手
 // @namespace    https://api.nodeimage.com/
-// @version      3.0.0
+// @version      3.0.1
 // @description  获取/保存 API Key、粘贴/拖拽上传、图片列表与删除、Markdown 插入（通过远程模块加载）
 // @author       yuyan
 // @match        *://www.nodeseek.com/*

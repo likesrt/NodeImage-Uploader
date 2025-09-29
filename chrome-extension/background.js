@@ -6,6 +6,16 @@
 
 /* global chrome */
 
+// 扩展配置
+const EXTENSION_CONFIG = {
+  // 是否启用Cookie认证模式（会创建临时标签页）
+  ENABLE_COOKIE_AUTH: false,  // 禁用标签页，直接使用后台fetch + Origin/Referer
+  // 是否显示认证相关的调试信息
+  DEBUG_AUTH: true,
+  // 是否使用静默模式（隐藏标签页，快速关闭）
+  SILENT_MODE: true
+};
+
 /**
  * 安装/更新时日志与（可选）动态规则初始化。
  * 目前主要依赖静态 DNR 规则（rules.json），此处仅留扩展点。
@@ -65,6 +75,7 @@ try {
  * 内容脚本通过 chrome.runtime.sendMessage 调用。
  */
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+
   if (!msg || msg.__ni_gm_xhr !== true) return false;
   const opts = msg.opts || {};
   const method = opts.method || 'GET';
@@ -84,12 +95,43 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         let tab = tabs && tabs[0];
         let createdTemp = false;
         if (!tab) {
-          tab = await chrome.tabs.create({ url: 'https://www.nodeimage.com/?ni_from=extension', active: false });
+          // 创建隐藏的后台标签页用于Cookie认证请求
+          const tabOptions = {
+            url: 'https://www.nodeimage.com/?ni_from=extension',
+            active: false,
+            // 在当前窗口的最后一个位置创建，减少用户感知
+            index: 9999
+          };
+
+          // 静默模式：尝试创建最小化的标签页
+          if (EXTENSION_CONFIG.SILENT_MODE) {
+            try {
+              // 尝试在新的最小化窗口中创建标签页
+              const windows = await chrome.windows.getAll({ populate: false });
+              if (windows.length > 0) {
+                // 选择一个现有窗口但保持非活动状态
+                tabOptions.windowId = windows[0].id;
+              }
+            } catch {}
+          }
+
+          tab = await chrome.tabs.create(tabOptions);
           createdTemp = true;
           await new Promise((res) => {
-            const onUpdated = (tid, info) => { if (tid === tab.id && info.status === 'complete') { chrome.tabs.onUpdated.removeListener(onUpdated); res(); } };
+            const onUpdated = (tid, info) => {
+              if (tid === tab.id && info.status === 'complete') {
+                chrome.tabs.onUpdated.removeListener(onUpdated);
+                // 静默模式下缩短等待时间
+                const delay = EXTENSION_CONFIG.SILENT_MODE ? 100 : 200;
+                setTimeout(res, delay);
+              }
+            };
             chrome.tabs.onUpdated.addListener(onUpdated);
           });
+
+          if (EXTENSION_CONFIG.DEBUG_AUTH) {
+            console.log('[NodeImage-Ext] 创建临时标签页:', tab.id, '静默模式:', EXTENSION_CONFIG.SILENT_MODE);
+          }
         }
         const formParts = Array.isArray(opts.formParts) ? opts.formParts : null;
         return await new Promise((resolve, reject) => {
@@ -104,59 +146,53 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
       };
 
-      if (opts.withCredentials) {
-        try {
-          const r = await doSiteFetch();
-          sendResponse(r);
-          return;
-        } catch (e) {
-          // fallback to background fetch
-        }
+      // 所有请求都使用后台fetch模式，不创建临时标签页
+      // 浏览器会自动携带Cookie，配合Origin/Referer头部模拟
+      if (EXTENSION_CONFIG.DEBUG_AUTH) {
+        const mode = opts.withCredentials ? 'Cookie认证' : 'API Key认证';
+        console.log(`[NodeImage-Ext] 使用后台fetch模式 (${mode}), URL:`, url);
       }
-      // 若收到序列化的 formParts，则在后台重建 FormData（支持 base64 或 ArrayBuffer 两种传输）
+      // 若收到序列化的 formParts，则在后台重建 FormData
       const parts = Array.isArray(opts.formParts) ? opts.formParts : null;
       if (parts && parts.length) {
         const fd = new FormData();
         for (const p of parts) {
-          if (p && p.kind === 'file' && p.buffer) {
+          if (p && p.kind === 'file') {
             try {
-              const u8 = new Uint8Array(p.buffer);
-              const file = new File([u8], p.fileName || 'blob', { type: p.mime || 'application/octet-stream', lastModified: p.lastModified || Date.now() });
+              let bytes;
+              // 支持 ArrayBuffer 传输（p.buffer）
+              if (p.buffer) {
+                bytes = new Uint8Array(p.buffer);
+              }
+              // 支持 base64 传输（p.base64）- content.js 使用的格式
+              else if (p.base64) {
+                const bin = atob(p.base64);
+                const len = bin.length;
+                bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+              }
+              else {
+                continue; // 跳过无效的文件条目
+              }
+
+              const file = new File([bytes], p.fileName || 'blob', {
+                type: p.mime || 'application/octet-stream',
+                lastModified: p.lastModified || Date.now()
+              });
               fd.append(p.key, file);
+
+              if (EXTENSION_CONFIG.DEBUG_AUTH) {
+                console.log('[NodeImage-Ext] 重建文件:', p.key, p.fileName, p.mime, bytes.length, 'bytes');
+              }
             } catch (e) {
-              // 回退为 Blob
-              try {
-                const u8 = new Uint8Array(p.buffer);
-                const blob = new Blob([u8], { type: p.mime || 'application/octet-stream' });
-                fd.append(p.key, blob);
-              } catch {}
+              console.error('[NodeImage-Ext] 重建文件失败:', p.key, e);
             }
           } else if (p && p.kind === 'text') {
             fd.append(p.key, p.value != null ? String(p.value) : '');
           }
         }
         body = fd;
-        // 让浏览器自动设置 multipart/form-data 的 boundary，移除可能的手动 content-type
-        try { delete headers['content-type']; delete headers['Content-Type']; } catch {}
-      }
-      // 兼容 base64 文件传输
-      if (parts && parts.length && !(body instanceof FormData)) {
-        const fd = new FormData();
-        for (const p of parts) {
-          if (p && p.kind === 'file' && p.base64) {
-            try {
-              const bin = atob(p.base64);
-              const len = bin.length;
-              const bytes = new Uint8Array(len);
-              for (let i=0;i<len;i++) bytes[i] = bin.charCodeAt(i);
-              const file = new File([bytes], p.fileName || 'blob', { type: p.mime || 'application/octet-stream', lastModified: p.lastModified || Date.now() });
-              fd.append(p.key, file);
-            } catch (e) {}
-          } else if (p && p.kind === 'text') {
-            fd.append(p.key, p.value != null ? String(p.value) : '');
-          }
-        }
-        body = fd;
+        // 让浏览器自动设置 multipart/form-data 的 boundary
         try { delete headers['content-type']; delete headers['Content-Type']; } catch {}
       }
       // 确保设置正确的referer和origin
@@ -165,7 +201,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         'Referer': 'https://www.nodeimage.com/',
         'Origin': 'https://www.nodeimage.com'
       };
-      
+
       const resp = await fetch(url, {
         method,
         headers: requestHeaders,

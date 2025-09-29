@@ -16,6 +16,15 @@
       const { insert = true } = options;
       if (!files || !files.length) return;
 
+      if (NI.config.DEBUG) {
+        console.group("📁 [NodeImage Handler] 开始批量处理文件");
+        console.log("文件列表:", files.map(f => ({
+          name: f.name,
+          size: f.size,
+          type: f.type
+        })));
+        console.log("选项:", { insert });
+      }
 
       // 显示上传开始状态
       if (files.length === 1) {
@@ -28,6 +37,9 @@
       let failCount = 0;
 
       for (const f of files) {
+        if (NI.config.DEBUG) {
+          console.log(`📤 开始处理文件: ${f.name}`);
+        }
         try {
           const r = await api.upload(f);
 
@@ -37,9 +49,19 @@
           if (r?.links?.markdown) {
             // 格式2: 有 links.markdown 字段
             md = r.links.markdown;
+            if (NI.config.DEBUG) {
+              console.log(`✅ ${f.name} 上传成功 (格式2):`, md);
+            }
           } else if (r?.url) {
             // 格式1: 直接有 url 字段
             md = `![](${r.url})`;
+            if (NI.config.DEBUG) {
+              console.log(`✅ ${f.name} 上传成功 (格式1):`, md);
+            }
+          } else {
+            if (NI.config.DEBUG) {
+              console.warn(`⚠️ ${f.name} 响应格式异常:`, r);
+            }
           }
 
           // 仅当 insert=true 时才插入到编辑器
@@ -47,16 +69,29 @@
             const inserted = NI.editor.insertMarkdown(md);
             if (!inserted) {
               utils.toast("图片上传成功，但无法插入到编辑器", "warning");
+              if (NI.config.DEBUG) {
+                console.warn(`⚠️ ${f.name} 无法插入到编辑器`);
+              }
+            } else if (NI.config.DEBUG) {
+              console.log(`✅ ${f.name} 已插入到编辑器`);
             }
           }
           successCount++;
         } catch (e) {
+          if (NI.config.DEBUG) {
+            console.error(`❌ ${f.name} 上传失败:`, e);
+          }
           utils.toast(e.message || "上传失败", "error");
           failCount++;
         }
       }
-      
+
       // 显示最终结果
+      if (NI.config.DEBUG) {
+        console.log(`📊 处理完成: 成功 ${successCount}, 失败 ${failCount}`);
+        console.groupEnd();
+      }
+
       if (files.length === 1) {
         if (successCount > 0) {
           utils.toast(insert ? "上传并插入成功！" : "上传成功！", "success");

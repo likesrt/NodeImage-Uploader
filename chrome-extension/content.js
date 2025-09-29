@@ -86,13 +86,26 @@
       raw = data;
     }
     try {
+      // 发送到后台脚本处理
       chrome.runtime.sendMessage({ __ni_gm_xhr: true, opts: { method, url, headers, responseType, withCredentials, formParts, data: raw } }, (res) => {
         const err = (chrome.runtime && chrome.runtime.lastError) || null;
-        if (err) { try { if (typeof onerror === 'function') onerror(err.message || err); } catch {} return; }
-        if (!res || res.error) { try { if (typeof onerror === 'function') onerror(res && res.error); } catch {} return; }
+        if (err) {
+          console.log('[NodeImage-Ext Content] Runtime error:', err.message || err);
+          try { if (typeof onerror === 'function') onerror(err.message || err); } catch {}
+          return;
+        }
+        if (!res || res.error) {
+          console.log('[NodeImage-Ext Content] Request error:', res && res.error);
+          try { if (typeof onerror === 'function') onerror(res && res.error); } catch {}
+          return;
+        }
+        console.log('[NodeImage-Ext Content] Request success:', method, url, res.status || 'OK');
         try { if (typeof onload === 'function') onload(res); } catch {}
       });
-    } catch (e) { try { if (typeof onerror === 'function') onerror(e); } catch {} }
+    } catch (e) {
+      console.error('[NodeImage-Ext Content] Send message error:', e);
+      try { if (typeof onerror === 'function') onerror(e); } catch {}
+    }
     return;
   }
 
@@ -137,6 +150,7 @@
   // 接收后台点击图标的打开面板指令
   try {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      // 处理打开面板指令
       if (msg && msg.__ni_open_panel) {
         try {
           if (window.NI && window.NI.ui && typeof window.NI.ui.openPanel === 'function') {
@@ -146,10 +160,12 @@
             try { sendResponse({ ok: false, error: 'NI not ready' }); } catch {}
           }
         } catch (e) {
-          try { sendResponse({ ok: false, error: String(e && e.message || e) }); } catch {}
+          try { sendResponse({ ok: false, error: e.message }); } catch {}
         }
-        return true;
+        return;
       }
+
+
       return false;
     });
   } catch {}

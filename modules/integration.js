@@ -71,27 +71,168 @@
     insertMarkdown(md){
       if(!md) return false;
 
+      if (NI.config && NI.config.DEBUG) {
+        console.group("✏️ [NodeImage Editor] 插入 Markdown");
+        console.log("待插入内容:", md);
+        console.log("当前焦点元素:", document.activeElement);
+        console.log("可见的CodeMirror元素:", document.querySelectorAll('.CodeMirror').length);
+        console.log("可见的textarea元素:", document.querySelectorAll('textarea').length);
+      }
+
+      // 强制重新查找编辑器，不依赖缓存（解决面板焦点问题）
+      this.editorElement = null;
+
+      // 先尝试主动激活编辑器焦点
+      this.activateEditor();
+
       // 使用和old.js相同的简单逻辑
       const cm = this.getCodeMirror();
       if (cm && typeof cm.getCursor === 'function' && typeof cm.replaceRange === 'function') {
-        const cursor = cm.getCursor();
-        cm.replaceRange(`\n${md}\n`, cursor);
+        // 确保CodeMirror有焦点
         if (typeof cm.focus === 'function') {
           cm.focus();
+        }
+
+        const cursor = cm.getCursor();
+        cm.replaceRange(`\n${md}\n`, cursor);
+
+        // 设置光标到插入内容的末尾
+        setTimeout(() => {
+          const newCursor = {
+            line: cursor.line + 2,
+            ch: 0
+          };
+          cm.setCursor(newCursor);
+          if (typeof cm.focus === 'function') {
+            cm.focus(); // 再次确保焦点
+          }
+        }, 50);
+
+        if (NI.config && NI.config.DEBUG) {
+          console.log("✅ 已插入到 CodeMirror 编辑器, 光标位置:", cursor);
+          console.groupEnd();
         }
         return true;
       }
 
-      // 备用方案：textarea
-      const ta = this.activeTextarea();
+      // 备用方案：textarea（增强检测）
+      const ta = this.findBestTextarea();
       if (ta) {
-        NI.utils.insertAtCursor(ta, `\n${md}\n`);
+        // 先激活焦点
         ta.focus();
+        ta.click(); // 模拟点击激活
+
+        // 稍作延迟确保焦点激活
+        setTimeout(() => {
+          if (NI.config && NI.config.DEBUG) {
+            console.log("插入前焦点检查:", document.activeElement === ta ? '已激活' : '未激活');
+          }
+
+          NI.utils.insertAtCursor(ta, `\n${md}\n`);
+
+          // 确保焦点和滚动
+          ta.focus();
+          ta.scrollTop = ta.scrollHeight;
+
+          // 触发input/change事件，确保编辑器感知到变化
+          const inputEvent = new Event('input', { bubbles: true });
+          ta.dispatchEvent(inputEvent);
+          const changeEvent = new Event('change', { bubbles: true });
+          ta.dispatchEvent(changeEvent);
+
+          if (NI.config && NI.config.DEBUG) {
+            console.log("✅ 已插入到 textarea 编辑器:", ta.tagName, ta.className);
+            console.log("插入后内容长度:", ta.value.length);
+            console.groupEnd();
+          }
+        }, 100);
+
         return true;
       }
 
+      if (NI.config && NI.config.DEBUG) {
+        console.warn("❌ 未找到可用的编辑器 (CodeMirror 或 textarea)");
+        console.log("调试信息 - 页面所有可能的编辑器:");
+        document.querySelectorAll('.CodeMirror, textarea, [contenteditable="true"]').forEach((el, i) => {
+          console.log(`${i+1}:`, el.tagName, el.className, el.style.display, el.offsetHeight > 0 ? '可见' : '隐藏');
+        });
+        console.groupEnd();
+      }
       return false;
     },
+
+    /** 主动激活编辑器焦点 */
+    activateEditor(){
+      if (NI.config && NI.config.DEBUG) {
+        console.log("🎯 [NodeImage Editor] 尝试激活编辑器焦点");
+      }
+
+      // 1. 尝试激活CodeMirror
+      const cm = this.getCodeMirror();
+      if (cm && typeof cm.focus === 'function') {
+        cm.focus();
+        if (NI.config && NI.config.DEBUG) {
+          console.log("✅ CodeMirror焦点已激活");
+        }
+        return;
+      }
+
+      // 2. 尝试激活textarea
+      const ta = this.findBestTextarea();
+      if (ta) {
+        ta.focus();
+        ta.click(); // 模拟用户点击
+        if (NI.config && NI.config.DEBUG) {
+          console.log("✅ textarea焦点已激活:", ta.tagName);
+        }
+        return;
+      }
+
+      // 3. 如果都失败，尝试点击可能的编辑区域
+      const editableElements = document.querySelectorAll('.CodeMirror, textarea, [contenteditable="true"]');
+      for (const el of editableElements) {
+        if (el.offsetHeight > 0) {
+          el.click();
+          if (el.focus) el.focus();
+          if (NI.config && NI.config.DEBUG) {
+            console.log("✅ 已点击激活编辑元素:", el.tagName, el.className);
+          }
+          return;
+        }
+      }
+
+      if (NI.config && NI.config.DEBUG) {
+        console.warn("⚠️ 无法激活任何编辑器焦点");
+      }
+    },
+
+    /** 改进的textarea查找逻辑 */
+    findBestTextarea(){
+      // 1. 优先返回当前焦点的 textarea
+      if(document.activeElement?.tagName==='TEXTAREA' && document.activeElement.offsetHeight > 0) {
+        return document.activeElement;
+      }
+
+      // 2. 查找CodeMirror内部的textarea（隐藏的但是实际使用的）
+      const cmTextarea = document.querySelector('.CodeMirror textarea');
+      if(cmTextarea) return cmTextarea;
+
+      // 3. 查找最大的可见textarea（通常是主要编辑区）
+      const textareas = Array.from(document.querySelectorAll('textarea')).filter(ta => {
+        return ta.offsetHeight > 0 && ta.style.display !== 'none' && !ta.disabled;
+      });
+
+      if (textareas.length === 0) return null;
+      if (textareas.length === 1) return textareas[0];
+
+      // 返回面积最大的textarea
+      return textareas.reduce((largest, current) => {
+        const largestArea = largest.offsetWidth * largest.offsetHeight;
+        const currentArea = current.offsetWidth * current.offsetHeight;
+        return currentArea > largestArea ? current : largest;
+      });
+    },
+
 
   };
 

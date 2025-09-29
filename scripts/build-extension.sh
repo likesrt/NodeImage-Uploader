@@ -10,8 +10,8 @@ OUT_DIR="$DIST_DIR/extension"
 KEY_DIR="$DIST_DIR/certs"
 KEY_FILE="$KEY_DIR/key.pem"
 
-ZIP_NAME=${ZIP_NAME:-nodeimage-extension.zip}
-CRX_NAME=${CRX_NAME:-nodeimage-extension.crx}
+ZIP_NAME=${ZIP_NAME:-chrome-nodeimage-extension.zip}
+CRX_NAME=${CRX_NAME:-chrome-nodeimage-extension.crx}
 
 copy_dir() {
   local src="$1" dst="$2"
