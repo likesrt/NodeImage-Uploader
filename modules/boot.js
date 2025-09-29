@@ -160,6 +160,10 @@
         flex: 1;       /* 占据剩余空间，开启内部滚动 */
         min-height: 0; /* 防止子元素撑开导致父容器溢出 */
         position: relative;
+        /* 防止不足两行时首行被拉伸占满容器高度 */
+        align-content: start;
+        align-items: start;
+        grid-auto-rows: auto;
       }
       .image-card {
         background: white;

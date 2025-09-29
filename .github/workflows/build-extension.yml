@@ -29,11 +29,16 @@ jobs:
         run: |
           bash scripts/build-extension.sh
 
-      - name: Upload artifacts
+      - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nodeimage-extension
-          path: |
-            dist/nodeimage-extension.zip
-            dist/nodeimage-extension.crx
+          name: nodeimage-extension.zip
+          path: dist/nodeimage-extension.zip
+          if-no-files-found: warn
+
+      - name: Upload CRX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodeimage-extension.crx
+          path: dist/nodeimage-extension.crx
           if-no-files-found: warn

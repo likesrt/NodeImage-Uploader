@@ -138,37 +138,26 @@
      * @returns {Promise<{images: Array, pagination: {currentPage:number,totalPages:number,totalCount:number,hasNextPage:boolean,hasPrevPage:boolean}}>} 兼容结构
      */
     async listViaCookieOrFallback(page = 1, limit = config.LIST_PAGE_SIZE) {
-      // 新接口（仅 Cookie 认证）- 明确使用 fetch + credentials: 'include'
+      // 新接口（仅 Cookie 认证）通过 GM_xmlhttpRequest 由扩展后台 + 页面桥发起，保证携带本地 Cookie；仅定制 Origin，其他由页面自动生成。
       const ts = Date.now();
       const url = `https://api.nodeimage.com/api/images?page=${encodeURIComponent(page)}&limit=${encodeURIComponent(limit)}&_t=${ts}`;
       try {
-        const t0 = Date.now();
-        // console.log('[NodeImage][cookie-api] 准备请求', { url, page, limit });
-        const resp = await fetch(url, {
-          method: 'GET',
-          credentials: 'include',
-          // 参考提供脚本：尽可能贴近浏览器实际请求头，但遵循 fetch 规范（部分 sec-* / user-agent 无法手动设置）
-          headers: {
-            'accept': 'application/json, text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'pragma': 'no-cache',
-          },
-          cache: 'no-cache',
-          mode: 'cors',
-          referrerPolicy: 'strict-origin-when-cross-origin',
+        const data = await new Promise((resolve, reject) => {
+          try {
+            GM_xmlhttpRequest({
+              method: 'GET',
+              url,
+              withCredentials: true,
+              responseType: 'json',
+              onload: (r) => {
+                if (r && r.status >= 200 && r.status < 300) {
+                  resolve(r.response || (()=>{ try { return JSON.parse(r.responseText||''); } catch { return null; } })());
+                } else reject(new Error('http ' + (r && r.status)));
+              },
+              onerror: (e) => reject(e || new Error('network error')),
+            });
+          } catch (e) { reject(e); }
         });
-        const ct = resp.headers.get('content-type') || '';
-        // console.log('[NodeImage][cookie-api] 响应', { status: resp.status, ct, ms: Date.now()-t0 });
-        if (!resp.ok) throw new Error('http ' + resp.status);
-        // 兼容返回类型：优先按 JSON 解析，不行则按文本再尝试 JSON 解析
-        let data;
-        if (ct.includes('application/json')) data = await resp.json();
-        else {
-          const txt = await resp.text();
-          // console.log('[NodeImage][cookie-api] 非JSON响应，尝试解析文本前缀', txt.slice(0, 200));
-          try { data = JSON.parse(txt); }
-          catch { throw new Error('bad format'); }
-        }
         if (!data || !Array.isArray(data.images)) throw new Error('bad format');
         const images = data.images.map((it) => ({
           image_id: it.imageId || it.image_id || it.id || '',
@@ -184,7 +173,7 @@
         const totalCount = Number(p.totalCount ?? images.length) || 0;
         const totalPages = Number(p.totalPages ?? Math.max(1, Math.ceil(totalCount / Math.max(1, limit))));
         const currentPage = Number(p.currentPage ?? page) || 1;
-        // console.log('[NodeImage][cookie-api] 数据', { images: images.length, totalCount, totalPages, currentPage, sample: images[0] || null });
+        // console.log('[NodeImage][cookie-api] 数据', { images: images.length, totalCount, totalPages, currentPage });
         return {
           images,
           pagination: {
