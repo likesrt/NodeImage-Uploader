@@ -415,6 +415,10 @@
       if (ok) {
         utils.toast("图片已插入编辑器");
         this.closePanel();
+        return true;
+      } else {
+        utils.toast("无法找到编辑器或插入失败");
+        return false;
       }
     },
     updateBatchButtons() {

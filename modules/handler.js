@@ -15,6 +15,17 @@
     async handleFiles(files, options = {}) {
       const { insert = true } = options;
       if (!files || !files.length) return;
+      
+      // 显示上传开始状态
+      if (files.length === 1) {
+        utils.toast("正在上传...");
+      } else {
+        utils.toast(`正在上传 ${files.length} 个文件...`);
+      }
+      
+      let successCount = 0;
+      let failCount = 0;
+      
       for (const f of files) {
         try {
           const r = await api.upload(f);
@@ -22,9 +33,29 @@
             r?.links?.markdown ||
             (r?.links?.direct ? `![](${r.links.direct})` : "");
           // 仅当 insert=true 时才插入到编辑器（面板上传应为 false）
-          if (md && insert) ui.insertMarkdown(md);
+          if (md && insert) {
+            const inserted = ui.insertMarkdown(md);
+            if (!inserted) {
+              utils.toast("图片上传成功，但无法插入到编辑器");
+            }
+          }
+          successCount++;
         } catch (e) {
           utils.toast(e.message || "上传失败");
+          failCount++;
+        }
+      }
+      
+      // 显示最终结果
+      if (files.length === 1) {
+        if (successCount > 0) {
+          utils.toast(insert ? "上传并插入成功！" : "上传成功！");
+        }
+      } else {
+        if (successCount > 0 && failCount === 0) {
+          utils.toast(`全部 ${successCount} 个文件上传成功！`);
+        } else if (successCount > 0 && failCount > 0) {
+          utils.toast(`${successCount} 个成功，${failCount} 个失败`);
         }
       }
     },

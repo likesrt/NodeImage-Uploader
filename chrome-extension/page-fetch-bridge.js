@@ -23,6 +23,7 @@
         const fd = new FormData();
         for (const p of formParts) {
           if (p && p.kind === 'file') {
+            console.log('[Page Bridge] Processing file part:', { key: p.key, fileName: p.fileName, mime: p.mime });
             if (p.base64) {
               try {
                 const bin = atob(p.base64);
@@ -33,7 +34,8 @@
                   type: p.mime || 'application/octet-stream', 
                   lastModified: p.lastModified || Date.now() 
                 });
-                fd.append(p.key, file, p.fileName || 'blob');
+                console.log('[Page Bridge] Appending file to FormData:', { key: p.key, fileName: file.name, type: file.type, size: file.size });
+                fd.append(p.key, file);
               } catch (e) {
                 console.error('[Page Bridge] Failed to rebuild file from base64:', e);
               }
@@ -44,7 +46,7 @@
                   type: p.mime || 'application/octet-stream', 
                   lastModified: p.lastModified || Date.now() 
                 });
-                fd.append(p.key, file, p.fileName || 'blob');
+                fd.append(p.key, file);
               } catch (e) {
                 console.error('[Page Bridge] Failed to rebuild file from buffer:', e);
               }

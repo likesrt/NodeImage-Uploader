@@ -150,7 +150,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               const bytes = new Uint8Array(len);
               for (let i=0;i<len;i++) bytes[i] = bin.charCodeAt(i);
               const file = new File([bytes], p.fileName || 'blob', { type: p.mime || 'application/octet-stream', lastModified: p.lastModified || Date.now() });
-              fd.append(p.key, file, p.fileName || 'blob');
+              fd.append(p.key, file);
             } catch (e) {}
           } else if (p && p.kind === 'text') {
             fd.append(p.key, p.value != null ? String(p.value) : '');
